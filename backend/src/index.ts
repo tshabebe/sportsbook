@@ -1,28 +1,11 @@
-import express, { Express, Request, Response } from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
+import { createApp } from './app';
+import { config } from './services/config';
 
 dotenv.config();
 
-const app: Express = express();
-const port = process.env.PORT || 3001;
+const app = createApp();
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Health check route
-app.get('/health', (req: Request, res: Response) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// API routes
-app.get('/api', (req: Request, res: Response) => {
-    res.json({ message: 'Welcome to the Sportsbook API' });
-});
-
-// Start server
-app.listen(port, () => {
-    console.log(`⚡️ Server is running at http://localhost:${port}`);
+app.listen(config.port, () => {
+  console.log(`⚡️ Server is running at http://localhost:${config.port}`);
 });
