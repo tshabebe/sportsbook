@@ -17,29 +17,95 @@ import { checkMaxPayout, checkOddsRange, checkStake } from '../services/risk';
 
 export const router = Router();
 
-const extractOddMatch = (
-  response: unknown,
-  selection: { betId?: number | string; value: string; odd: number; bookmakerId?: number },
-): boolean => {
-  if (!Array.isArray(response)) return false;
-  for (const item of response) {
-    const bookmaker = item?.bookmaker?.id;
-    if (selection.bookmakerId && bookmaker && Number(bookmaker) !== Number(selection.bookmakerId)) {
-      continue;
-    }
-    const bets = item?.bets ?? [];
-    for (const bet of bets) {
-      if (selection.betId && bet?.id && String(bet.id) !== String(selection.betId)) {
-        continue;
+const extractSelectionsFromItem = (item: any) => {
+  const selections: Array<{
+    betId?: number | string;
+    value: string;
+    odd: number;
+    handicap?: string;
+    suspended?: boolean;
+    bookmakerId?: number;
+  }> = [];
+
+  if (Array.isArray(item?.bookmakers)) {
+    for (const bookmaker of item.bookmakers) {
+      const bookmakerId = bookmaker?.id;
+      const bets = bookmaker?.bets ?? [];
+      for (const bet of bets) {
+        const values = bet?.values ?? [];
+        for (const value of values) {
+          if (value?.value && value?.odd) {
+            selections.push({
+              betId: bet?.id,
+              value: String(value.value),
+              odd: Number(value.odd),
+              handicap: value?.handicap !== undefined ? String(value.handicap) : undefined,
+              suspended: Boolean(value?.suspended),
+              bookmakerId,
+            });
+          }
+        }
       }
+    }
+  }
+
+  if (Array.isArray(item?.odds)) {
+    for (const bet of item.odds) {
       const values = bet?.values ?? [];
       for (const value of values) {
-        if (
-          String(value?.value ?? '').toLowerCase() === selection.value.toLowerCase() &&
-          Number(value?.odd) === Number(selection.odd)
-        ) {
-          return true;
+        if (value?.value && value?.odd) {
+          selections.push({
+            betId: bet?.id,
+            value: String(value.value),
+            odd: Number(value.odd),
+            handicap: value?.handicap !== undefined ? String(value.handicap) : undefined,
+            suspended: Boolean(value?.suspended),
+          });
         }
+      }
+    }
+  }
+
+  return selections;
+};
+
+const normalizeHandicap = (value?: string | number) =>
+  value === undefined || value === null ? undefined : String(value);
+
+const oddsEqual = (a?: number, b?: number) => {
+  if (a === undefined || b === undefined) return false;
+  return Math.abs(Number(a) - Number(b)) <= 0.001;
+};
+
+const extractOddMatch = (
+  response: unknown,
+  selection: {
+    betId?: number | string;
+    value: string;
+    odd: number;
+    bookmakerId?: number;
+    handicap?: string | number;
+  },
+): boolean => {
+  if (!Array.isArray(response)) return false;
+  const targetHandicap = normalizeHandicap(selection.handicap);
+  for (const item of response) {
+    const selections = extractSelectionsFromItem(item);
+    for (const s of selections) {
+      if (selection.bookmakerId && s.bookmakerId && Number(s.bookmakerId) !== Number(selection.bookmakerId)) {
+        continue;
+      }
+      if (selection.betId && s.betId && String(s.betId) !== String(selection.betId)) {
+        continue;
+      }
+      if (targetHandicap && normalizeHandicap(s.handicap) !== targetHandicap) {
+        continue;
+      }
+      if (
+        s.value.toLowerCase() === selection.value.toLowerCase() &&
+        oddsEqual(Number(s.odd), Number(selection.odd))
+      ) {
+        return true;
       }
     }
   }
@@ -54,7 +120,13 @@ const extractToken = (req: Request): string | null => {
 
 const extractSelectionMatchFromSnapshot = (
   snapshot: unknown,
-  selection: { betId?: number | string; value: string; odd: number; bookmakerId?: number },
+  selection: {
+    betId?: number | string;
+    value: string;
+    odd: number;
+    bookmakerId?: number;
+    handicap?: string | number;
+  },
   fixtureId: number,
 ): boolean => {
   if (!snapshot || typeof snapshot !== 'object') return false;
@@ -73,33 +145,39 @@ const extractSelectionMatchFromSnapshot = (
 
 const extractSelectionDetailsFromSnapshot = (
   snapshot: unknown,
-  selection: { betId?: number | string; value: string; odd: number; bookmakerId?: number },
+  selection: {
+    betId?: number | string;
+    value: string;
+    odd: number;
+    bookmakerId?: number;
+    handicap?: string | number;
+  },
   fixtureId: number,
 ): { found: boolean; suspended?: boolean } => {
   if (!snapshot || typeof snapshot !== 'object') return { found: false };
   const response = (snapshot as { response?: unknown }).response;
   if (!Array.isArray(response)) return { found: false };
+  const targetHandicap = normalizeHandicap(selection.handicap);
   const fixtureItems = response.filter(
     (item) => Number(item?.fixture?.id) === Number(fixtureId),
   );
   for (const item of fixtureItems) {
-    const bookmaker = item?.bookmaker?.id;
-    if (selection.bookmakerId && bookmaker && Number(bookmaker) !== Number(selection.bookmakerId)) {
-      continue;
-    }
-    const bets = item?.bets ?? [];
-    for (const bet of bets) {
-      if (selection.betId && bet?.id && String(bet.id) !== String(selection.betId)) {
+    const selections = extractSelectionsFromItem(item);
+    for (const s of selections) {
+      if (selection.bookmakerId && s.bookmakerId && Number(s.bookmakerId) !== Number(selection.bookmakerId)) {
         continue;
       }
-      const values = bet?.values ?? [];
-      for (const value of values) {
-        if (
-          String(value?.value ?? '').toLowerCase() === selection.value.toLowerCase() &&
-          Number(value?.odd) === Number(selection.odd)
-        ) {
-          return { found: true, suspended: Boolean(value?.suspended) };
-        }
+      if (selection.betId && s.betId && String(s.betId) !== String(selection.betId)) {
+        continue;
+      }
+      if (targetHandicap && normalizeHandicap(s.handicap) !== targetHandicap) {
+        continue;
+      }
+      if (
+        s.value.toLowerCase() === selection.value.toLowerCase() &&
+        oddsEqual(Number(s.odd), Number(selection.odd))
+      ) {
+        return { found: true, suspended: Boolean(s.suspended) };
       }
     }
   }
@@ -119,7 +197,8 @@ const isFixtureInPlay = (snapshot: unknown, fixtureId: number): boolean => {
   if (!Array.isArray(response)) return false;
   const item = response.find((row) => Number(row?.fixture?.id) === Number(fixtureId));
   const status = String(item?.fixture?.status?.short ?? '').toUpperCase();
-  return status !== '' && status !== 'NS';
+  const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE']);
+  return inPlayStatuses.has(status);
 };
 
 router.post('/betslip/validate', async (req: Request, res: Response) => {
@@ -190,7 +269,13 @@ router.post('/betslip/validate', async (req: Request, res: Response) => {
             error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
           };
         }
-        const exposure = await getExposureForOutcome(selection.fixtureId, selection.value);
+        const exposure = await getExposureForOutcome(
+          selection.fixtureId,
+          selection.value,
+          selection.betId,
+          selection.handicap,
+          selection.bookmakerId,
+        );
         const projected = exposure + slip.stake * selection.odd;
         if (projected > config.risk.maxExposurePerOutcome) {
           return {
@@ -285,7 +370,13 @@ router.post('/betslip/place', async (req: Request, res: Response) => {
             error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
           };
         }
-        const exposure = await getExposureForOutcome(selection.fixtureId, selection.value);
+        const exposure = await getExposureForOutcome(
+          selection.fixtureId,
+          selection.value,
+          selection.betId,
+          selection.handicap,
+          selection.bookmakerId,
+        );
         const projected = exposure + slip.stake * selection.odd;
         if (projected > config.risk.maxExposurePerOutcome) {
           return {
@@ -310,24 +401,42 @@ router.post('/betslip/place', async (req: Request, res: Response) => {
       return;
     }
 
-    const debitTx = `DEBIT_aviator_${Date.now()}`;
+    const betRef = `bet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const debitTx = `DEBIT_${betRef}`;
     await walletClient.debit(token, {
       chatId: userId,
       username,
       amount: slip.stake,
-      game: 'Aviator',
-      round_id: `bet_${Date.now()}`,
+      game: config.walletGameName,
+      round_id: betRef,
       transaction_id: debitTx,
     });
 
-    const betRef = `bet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const betId = await createBetWithSelections(
-      betRef,
-      slip,
-      { id: Number(userId) || undefined, username },
-      'pending',
-      debitTx,
-    );
+    let betId: number | null = null;
+    try {
+      betId = await createBetWithSelections(
+        betRef,
+        slip,
+        { id: Number(userId) || undefined, username },
+        'pending',
+        debitTx,
+      );
+    } catch (dbErr) {
+      try {
+        await walletClient.credit(token, {
+          chatId: userId,
+          username,
+          amount: slip.stake,
+          game: config.walletGameName,
+          round_id: betRef,
+          transaction_id: `CREDIT_${betRef}`,
+          debit_transaction_id: debitTx,
+        });
+      } catch (creditErr) {
+        console.error('Failed to compensate wallet debit', creditErr);
+      }
+      throw dbErr;
+    }
     const bet = betId ? await getBetWithSelections(betId) : placeBet(slip, 'pending');
     res.json({ ok: true, bet });
   } catch (err) {

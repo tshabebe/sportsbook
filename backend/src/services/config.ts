@@ -31,9 +31,12 @@ export const config = {
   walletGameName: process.env.WALLET_GAME_NAME ?? 'Sportsbook',
   cacheTtlSeconds: {
     default: toInt(process.env.CACHE_TTL_DEFAULT, 60),
+    short: toInt(process.env.CACHE_TTL_SHORT, 60),
+    medium: toInt(process.env.CACHE_TTL_MEDIUM, 3600),
+    long: toInt(process.env.CACHE_TTL_LONG, 86400),
     status: toInt(process.env.CACHE_TTL_STATUS, 60),
     fixturesLive: toInt(process.env.CACHE_TTL_FIXTURES_LIVE, 60),
-    oddsLive: toInt(process.env.CACHE_TTL_ODDS_LIVE, 60),
+    oddsLive: toInt(process.env.CACHE_TTL_ODDS_LIVE, 15),
   },
   risk: {
     minStake: toInt(process.env.RISK_MIN_STAKE, 1),

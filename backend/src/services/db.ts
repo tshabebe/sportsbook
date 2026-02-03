@@ -11,6 +11,8 @@ import {
 import type { BetSlipInput } from '../validation/bets';
 
 let schemaEnsured = false;
+const memorySnapshots: Array<{ source: string; capturedAt: string; payload: unknown }> = [];
+const MAX_MEMORY_SNAPSHOTS = 200;
 
 const ensureSchema = async (): Promise<void> => {
   if (schemaEnsured) return;
@@ -48,10 +50,17 @@ const ensureSchema = async (): Promise<void> => {
       market_bet_id TEXT,
       value TEXT NOT NULL,
       odd NUMERIC(8,3) NOT NULL,
+      handicap TEXT,
       bookmaker_id BIGINT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+  await db.execute(sql`ALTER TABLE bet_selections ADD COLUMN IF NOT EXISTS handicap TEXT;`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS bets_bet_ref_idx ON bets (bet_ref);`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS bets_status_idx ON bets (status);`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS bets_user_id_idx ON bets (user_id);`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS bet_selections_fixture_idx ON bet_selections (fixture_id);`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS bet_selections_bet_idx ON bet_selections (bet_id);`);
   schemaEnsured = true;
 };
 
@@ -59,6 +68,10 @@ export const storeOddsSnapshot = async (
   source: string,
   payload: unknown,
 ): Promise<void> => {
+  memorySnapshots.unshift({ source, capturedAt: new Date().toISOString(), payload });
+  if (memorySnapshots.length > MAX_MEMORY_SNAPSHOTS) {
+    memorySnapshots.length = MAX_MEMORY_SNAPSHOTS;
+  }
   const db = getDb();
   if (!db) return;
   await ensureSchema();
@@ -72,25 +85,49 @@ export const storeOddsSnapshot = async (
 export const getLatestOddsSnapshotForFixture = async (
   fixtureId: number,
 ): Promise<{ id: number; payload: unknown; capturedAt: string } | null> => {
-  const db = getDb();
-  if (!db) return null;
-  await ensureSchema();
-  const rows = await db.execute(sql`
-    SELECT id, payload, captured_at
-    FROM odds_snapshots
-    WHERE jsonb_path_exists(payload, ${`$.response[*].fixture.id ? (@ == ${fixtureId})`})
-    ORDER BY id DESC
-    LIMIT 1
-  `);
-  const first = (rows as unknown as {
-    rows: Array<{ id: number; payload: unknown; captured_at: string }>;
-  }).rows?.[0];
-  if (!first) return null;
-  return {
-    id: first.id,
-    payload: first.payload,
-    capturedAt: first.captured_at,
-  };
+  try {
+    const db = getDb();
+    if (!db) {
+      return findSnapshotInMemory(fixtureId);
+    }
+    await ensureSchema();
+    const rows = await db.execute(sql`
+      SELECT id, payload, captured_at
+      FROM odds_snapshots
+      WHERE jsonb_path_exists(payload, ${`$.response[*].fixture.id ? (@ == ${fixtureId})`})
+      ORDER BY id DESC
+      LIMIT 1
+    `);
+    const first = (rows as unknown as {
+      rows: Array<{ id: number; payload: unknown; captured_at: string }>;
+    }).rows?.[0];
+    if (!first) return null;
+    return {
+      id: first.id,
+      payload: first.payload,
+      capturedAt: first.captured_at,
+    };
+  } catch (err) {
+    console.error('Failed to load odds snapshot', err);
+    return findSnapshotInMemory(fixtureId);
+  }
+};
+
+const findSnapshotInMemory = (
+  fixtureId: number,
+): { id: number; payload: unknown; capturedAt: string } | null => {
+  for (let i = 0; i < memorySnapshots.length; i += 1) {
+    const entry = memorySnapshots[i];
+    const payload = entry?.payload as { response?: unknown } | undefined;
+    const response = Array.isArray(payload?.response) ? payload?.response : [];
+    const hasFixture = response.some(
+      (item) => Number(item?.fixture?.id) === Number(fixtureId),
+    );
+    if (hasFixture) {
+      return { id: -1, payload: entry.payload, capturedAt: entry.capturedAt };
+    }
+  }
+  return null;
 };
 
 export const createBetWithSelections = async (
@@ -107,7 +144,7 @@ export const createBetWithSelections = async (
     betRef,
     userId: user.id ?? null,
     username: user.username ?? null,
-    stake: slip.stake,
+    stake: slip.stake.toFixed(2),
     status,
     walletDebitTx: walletDebitTx ?? null,
   });
@@ -120,7 +157,8 @@ export const createBetWithSelections = async (
       fixtureId: selection.fixtureId,
       marketBetId: selection.betId ? String(selection.betId) : null,
       value: selection.value,
-      odd: selection.odd,
+      odd: selection.odd.toFixed(3),
+      handicap: selection.handicap !== undefined ? String(selection.handicap) : null,
       bookmakerId: selection.bookmakerId ?? null,
     }),
   );
@@ -203,6 +241,9 @@ export const listPendingBetsByFixture = async (fixtureId: number) => {
 export const getExposureForOutcome = async (
   fixtureId: number,
   value: string,
+  marketBetId?: string | number,
+  handicap?: string | number,
+  bookmakerId?: number,
 ): Promise<number> => {
   const db = getDb();
   if (!db) return 0;
@@ -214,6 +255,9 @@ export const getExposureForOutcome = async (
     WHERE b.status = 'pending'
       AND s.fixture_id = ${fixtureId}
       AND s.value = ${value}
+      AND (${marketBetId !== undefined ? sql` s.market_bet_id = ${String(marketBetId)} ` : sql` TRUE `})
+      AND (${handicap !== undefined ? sql` s.handicap = ${String(handicap)} ` : sql` TRUE `})
+      AND (${bookmakerId !== undefined ? sql` s.bookmaker_id = ${bookmakerId} ` : sql` TRUE `})
   `);
   const first = (rows as unknown as { rows: Array<{ exposure: string | number }> }).rows?.[0];
   const exposure = Number(first?.exposure ?? 0);
