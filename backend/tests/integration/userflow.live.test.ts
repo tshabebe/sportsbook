@@ -21,15 +21,6 @@ describe('user flow live integration', () => {
         return response;
       };
 
-      const optionalGet = async (url: string) => {
-        const response = await request(app).get(url);
-        if (response.status !== 200) {
-          console.log('[userflow] optional endpoint failed', url, response.status);
-          return null;
-        }
-        return response;
-      };
-
       const profileResponse = await request(app)
         .get('/api/wallet/profile')
         .set('Authorization', `Bearer ${process.env.TEST_TOKEN}`);
@@ -41,8 +32,8 @@ describe('user flow live integration', () => {
       console.log('[userflow] profile', { username, balanceBefore });
 
       // 1) Home / Popular Leagues
-      const popular = await optionalGet('/api/football/leagues/popular');
-      const popularLeagues = popular?.body?.leagues ?? [];
+      const popular = await requiredGet('/api/football/leagues/popular');
+      const popularLeagues = popular.body?.leagues ?? [];
       const firstLeague = Array.isArray(popularLeagues) ? popularLeagues.find((l: any) => l?.id) : null;
       const leagueId = Number(firstLeague?.id ?? process.env.TEST_LEAGUE_ID ?? 39);
       const season = Number(process.env.TEST_SEASON ?? 2024);
@@ -51,8 +42,8 @@ describe('user flow live integration', () => {
       const fixturesResponse = await requiredGet(
         `/api/football/fixtures?league=${leagueId}&season=${season}&next=20`,
       );
-      await optionalGet(`/api/football/standings?league=${leagueId}&season=${season}`);
-      await optionalGet(`/api/football/fixtures/rounds?league=${leagueId}&season=${season}`);
+      await requiredGet(`/api/football/standings?league=${leagueId}&season=${season}`);
+      await requiredGet(`/api/football/fixtures/rounds?league=${leagueId}&season=${season}`);
 
       const fixturesList = fixturesResponse.body?.response ?? [];
       const firstFixture = Array.isArray(fixturesList) ? fixturesList[0] : null;
@@ -101,22 +92,22 @@ describe('user flow live integration', () => {
       const h2hHome = Number(fixtureDetailItem?.teams?.home?.id);
       const h2hAway = Number(fixtureDetailItem?.teams?.away?.id);
       if (Number.isFinite(h2hHome) && Number.isFinite(h2hAway)) {
-        await optionalGet(`/api/football/fixtures/headtohead?h2h=${h2hHome}-${h2hAway}`);
+        await requiredGet(`/api/football/fixtures/headtohead?h2h=${h2hHome}-${h2hAway}`);
       }
       const teamId = Number(fixtureDetailItem?.teams?.home?.id);
       if (Number.isFinite(teamId)) {
-        await optionalGet(`/api/football/injuries?league=${leagueId}&season=${season}&team=${teamId}`);
+        await requiredGet(`/api/football/injuries?league=${leagueId}&season=${season}&team=${teamId}`);
       }
-      await optionalGet(`/api/football/fixtures/lineups?fixture=${fixtureId}`);
-      await optionalGet(`/api/football/predictions?fixture=${fixtureId}`);
+      await requiredGet(`/api/football/fixtures/lineups?fixture=${fixtureId}`);
+      await requiredGet(`/api/football/predictions?fixture=${fixtureId}`);
 
       // 5) Live Tab
-      await optionalGet('/api/football/fixtures/live');
-      await optionalGet('/api/football/odds/live');
+      await requiredGet('/api/football/fixtures/live');
+      await requiredGet('/api/football/odds/live');
 
       // 6) Live Match Page (stats/events)
-      await optionalGet(`/api/football/fixtures/statistics?fixture=${fixtureId}`);
-      await optionalGet(`/api/football/fixtures/events?fixture=${fixtureId}`);
+      await requiredGet(`/api/football/fixtures/statistics?fixture=${fixtureId}`);
+      await requiredGet(`/api/football/fixtures/events?fixture=${fixtureId}`);
 
       const oddsItems = oddsResponse.body?.response ?? [];
       const firstItem = Array.isArray(oddsItems) ? oddsItems[0] : null;
