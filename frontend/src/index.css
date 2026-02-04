@@ -20,33 +20,59 @@
   --font-poppins: "Poppins", sans-serif;
 }
 
+/* Light Mode Defaults */
 :root {
-  /* Poppins Font Import (assuming we'll add the google font link later or use a local one) */
+  /* Poppins Font Import */
   font-family: var(--font-poppins);
-  color-scheme: dark;
-
-  /* --- Design Tokens (Gold/Dark Theme) --- */
+  color-scheme: light;
 
   /* Backgrounds */
-  --color-app-bg: #0d0d0d;
-  --color-element-bg: #1a1a1a;
-  --color-element-hover-bg: #262626;
+  --color-app-bg: #f9fafe;
+  /* Light gray/whiteish */
+  --color-element-bg: #ffffff;
+  --color-element-hover-bg: #f3f4f6;
 
   /* Borders */
-  --color-border-subtle: #333333;
+  --color-border-subtle: #e5e7eb;
 
   /* Text */
-  --color-text-contrast: #ffffff;
-  --color-text-muted: #888888;
+  --color-text-contrast: #111827;
+  /* Near black */
+  --color-text-muted: #6b7280;
 
-  /* Accent (Gold) */
+  /* Accent (Gold - Consistent across themes or slightly darker for contrast?) */
   --color-accent-solid: #FFD700;
-  --color-accent-solid-hover: #FFC700;
+  --color-accent-solid-hover: #e6c200;
   --color-accent-text-contrast: #000000;
 
   /* Status */
   --color-success-solid: #28B328;
 }
+
+/* Dark Mode Overrides (System Preference) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    /* Backgrounds */
+    --color-app-bg: #0d0d0d;
+    --color-element-bg: #1a1a1a;
+    --color-element-hover-bg: #262626;
+
+    /* Borders */
+    --color-border-subtle: #333333;
+
+    /* Text */
+    --color-text-contrast: #ffffff;
+    --color-text-muted: #888888;
+
+    /* Accent (Gold) */
+    --color-accent-solid: #FFD700;
+    --color-accent-solid-hover: #FFC700;
+    --color-accent-text-contrast: #000000;
+  }
+}
+
 
 body {
   background-color: var(--color-app-bg);
