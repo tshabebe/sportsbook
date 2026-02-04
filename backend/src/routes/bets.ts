@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import { fetchApi } from '../services/apiFootball';
 import { placeBet, BetSlip } from '../services/bets';
 import { betSlipSchema } from '../validation/bets';
 import {
