@@ -1,7 +1,6 @@
 import express, { Express, Request, Response } from 'express';
 import cors from 'cors';
 import { router as footballRouter } from './routes/football';
-import { router as marketsRouter } from './routes/markets';
 import { router as betsRouter } from './routes/bets';
 import { router as walletRouter } from './routes/wallet';
 
@@ -24,7 +23,6 @@ export const createApp = (): Express => {
   });
 
   app.use('/api/football', footballRouter);
-  app.use('/api/markets', marketsRouter);
   app.use('/api', betsRouter);
   app.use('/api/wallet', walletRouter);
 
