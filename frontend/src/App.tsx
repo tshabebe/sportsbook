@@ -9,6 +9,7 @@ function App() {
       <Route path="/" element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="betslip" element={<BetSlipPage />} />
+        <Route path="event/:id" element={<div className="p-8 text-center">Event Details Coming Soon</div>} />
       </Route>
     </Routes>
   );

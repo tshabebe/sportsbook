@@ -10,11 +10,14 @@ interface MatchCardProps {
 
 export function MatchCard({ fixture }: MatchCardProps) {
     const { addBet } = useBetStore();
-    const { fixture: info, teams, goals, odds } = fixture;
+    const { fixture: info, teams, goals, odds } = fixture || {};
+    const validOdds = odds || { home: "-", draw: "-", away: "-" };
+
+    if (!info || !teams) return null; // Guard clause
 
     // Format logic (elapsed time, score)
-    const isLive = info.status.short === "1H" || info.status.short === "2H" || info.status.short === "HT";
-    const timeDisplay = isLive ? `${info.status.elapsed}'` : info.status.short;
+    const isLive = info.status?.short === "1H" || info.status?.short === "2H" || info.status?.short === "HT";
+    const timeDisplay = isLive ? `${info.status?.elapsed}'` : info.status?.short;
 
     const handleBet = (selection: "Home" | "Draw" | "Away", oddValue: string) => {
         addBet({
@@ -68,28 +71,28 @@ export function MatchCard({ fixture }: MatchCardProps) {
                     variant="outline"
                     size="sm"
                     className="flex-1 md:w-16 h-8 text-xs bg-element-bg border-border-subtle hover:border-accent-solid hover:bg-element-hover-bg"
-                    onPress={() => handleBet("Home", odds.home)}
+                    onPress={() => handleBet("Home", validOdds.home)}
                 >
                     <span className="text-text-muted mr-1">1</span>
-                    <span className="text-accent-solid font-bold">{odds.home}</span>
+                    <span className="text-accent-solid font-bold">{validOdds.home}</span>
                 </Button>
                 <Button
                     variant="outline"
                     size="sm"
                     className="flex-1 md:w-16 h-8 text-xs bg-element-bg border-border-subtle hover:border-accent-solid hover:bg-element-hover-bg"
-                    onPress={() => handleBet("Draw", odds.draw)}
+                    onPress={() => handleBet("Draw", validOdds.draw)}
                 >
                     <span className="text-text-muted mr-1">X</span>
-                    <span className="text-accent-solid font-bold">{odds.draw}</span>
+                    <span className="text-accent-solid font-bold">{validOdds.draw}</span>
                 </Button>
                 <Button
                     variant="outline"
                     size="sm"
                     className="flex-1 md:w-16 h-8 text-xs bg-element-bg border-border-subtle hover:border-accent-solid hover:bg-element-hover-bg"
-                    onPress={() => handleBet("Away", odds.away)}
+                    onPress={() => handleBet("Away", validOdds.away)}
                 >
                     <span className="text-text-muted mr-1">2</span>
-                    <span className="text-accent-solid font-bold">{odds.away}</span>
+                    <span className="text-accent-solid font-bold">{validOdds.away}</span>
                 </Button>
 
                 <Link to={`/event/${info.id}`} className="hidden md:flex text-text-muted hover:text-text-contrast">

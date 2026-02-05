@@ -19,8 +19,7 @@ export function MobileHeader() {
                 <div className="flex items-center gap-3">
                     <Menu size={20} className="text-text-contrast" />
                     <div className="flex items-center gap-1">
-                        <span className="text-accent-solid text-xl font-bold">B</span>
-                        <span className="text-text-contrast text-xl font-bold">BETS</span>
+                        <span className="text-text-contrast text-xl font-bold">classicBet</span>
                     </div>
                 </div>
 

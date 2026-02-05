@@ -64,6 +64,7 @@ export const usePreMatchFixtures = (leagueId: number, pages: number = 1) => {
             return data.fixtures;
         },
         enabled: !!leagueId,
+        staleTime: 0
     });
 };
 
@@ -180,13 +181,15 @@ export const useTopLeagues = () => {
     return useQuery({
         queryKey: ["leagues", "popular"],
         queryFn: async () => {
+            console.log("Fetching popular leagues...");
             const { data } = await api.get<PopularLeaguesResponse>("/football/leagues/popular");
+            console.log("Popular leagues response:", data);
             if (data.ok) {
                 return data.leagues;
             }
             throw new Error("Failed to fetch popular leagues");
         },
-        staleTime: 1000 * 60 * 60 * 24, // Cache for 24 hours
+        staleTime: 0, // Disable cache for debugging to ensure fresh fetch
     });
 };
 

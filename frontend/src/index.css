@@ -41,8 +41,8 @@
   --color-text-muted: #6b7280;
 
   /* Accent (Gold - Consistent across themes or slightly darker for contrast?) */
-  --color-accent-solid: #FFD700;
-  --color-accent-solid-hover: #e6c200;
+  --color-accent-solid: hsl(137, 74%, 46%);
+  --color-accent-solid-hover: hsl(51, 100%, 45%);
   --color-accent-text-contrast: #000000;
 
   /* Status */

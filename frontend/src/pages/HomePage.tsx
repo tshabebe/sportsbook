@@ -1,16 +1,30 @@
+import { useState } from "react";
 import { Button } from "../components/ui/Button";
 import { Leaderboard } from "../components/Leaderboard";
 import { MatchCard } from "../components/MatchCard";
-import { useLiveMatches, useTopLeagues } from "../hooks/useFootball";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { useLiveMatches, useTopLeagues, usePreMatchFixtures } from "../hooks/useFootball";
+import { ChevronRight } from "lucide-react";
 
 export function HomePage() {
-    const { data: liveMatches, isLoading } = useLiveMatches();
+    const [activeTab, setActiveTab] = useState<'live' | 'prematch'>('live');
+
+    // Live Data
+    const { data: liveMatches, isLoading: isLiveLoading } = useLiveMatches();
+
+    // Pre-match Data (Defaults to Premier League - 39 for now)
+    const { data: preMatchMatches, isLoading: isPreMatchLoading } = usePreMatchFixtures(39, 1);
+
+    // Top Leagues
     const { data: leagues } = useTopLeagues();
+
+    // Derived State
+    const isLoading = activeTab === 'live' ? isLiveLoading : isPreMatchLoading;
+    const matches = activeTab === 'live' ? liveMatches : preMatchMatches;
+    const sectionTitle = activeTab === 'live' ? 'Live Now' : 'Upcoming Matches';
 
     return (
         <div className="flex flex-col gap-6 pb-20 md:pb-0">
-            {/* Promotions Carousel (Mocked specific items for now) */}
+            {/* Promotions Carousel */}
             <section className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
                 {[1, 2, 3].map(i => (
                     <div key={i} className="min-w-[280px] h-40 bg-gradient-to-br from-element-bg to-element-hover-bg rounded-xl border border-white/5 p-4 flex flex-col justify-end relative overflow-hidden group">
@@ -23,40 +37,26 @@ export function HomePage() {
 
             {/* Navigation Tabs (Quick Filters) */}
             <div className="flex gap-6 border-b border-border-subtle">
-                <button className="pb-3 text-sm font-semibold text-accent-solid border-b-2 border-accent-solid">Live</button>
-                <button className="pb-3 text-sm font-medium text-text-muted hover:text-text-contrast transition-colors">Pre-match</button>
-                <button className="pb-3 text-sm font-medium text-text-muted hover:text-text-contrast transition-colors">Virtual</button>
-                <button className="pb-3 text-sm font-medium text-text-muted hover:text-text-contrast transition-colors">Esports</button>
+                <button
+                    onClick={() => setActiveTab('live')}
+                    className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'live' ? 'text-accent-solid border-b-2 border-accent-solid' : 'text-text-muted hover:text-text-contrast'}`}
+                >
+                    Live
+                </button>
+                <button
+                    onClick={() => setActiveTab('prematch')}
+                    className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'prematch' ? 'text-accent-solid border-b-2 border-accent-solid' : 'text-text-muted hover:text-text-contrast'}`}
+                >
+                    Pre-match
+                </button>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6">
 
-                {/* Main Content: Live Games */}
+                {/* Main Content */}
                 <div className="flex-1 flex flex-col gap-6">
-                    {/* Live Section */}
-                    <div className="bg-element-bg rounded-xl border border-border-subtle overflow-hidden">
-                        <div className="flex items-center justify-between p-4 border-b border-border-subtle bg-element-hover-bg/30">
-                            <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                <h2 className="font-semibold text-text-contrast">Live Now</h2>
-                            </div>
-                            <Button variant="ghost" size="sm" className="text-xs">View All <ChevronRight size={14} /></Button>
-                        </div>
 
-                        <div className="p-2">
-                            {isLoading ? (
-                                <div className="p-8 text-center text-text-muted">Loading live matches...</div>
-                            ) : liveMatches && liveMatches.length > 0 ? (
-                                liveMatches.map((fixture: any) => (
-                                    <MatchCard key={fixture.fixture.id} fixture={fixture} />
-                                ))
-                            ) : (
-                                <div className="p-8 text-center text-text-muted">No live matches currently available.</div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Top Leagues (Horizontal Scroll for visual appeal) */}
+                    {/* Top Leagues (Moved to Top) */}
                     <div className="bg-element-bg rounded-xl border border-border-subtle p-4">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="font-semibold text-text-contrast">Top Leagues</h3>
@@ -75,6 +75,29 @@ export function HomePage() {
                                     <span className="text-xs font-medium text-text-muted group-hover:text-text-contrast text-center leading-tight line-clamp-2 w-full">{league.name}</span>
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    {/* Games List (Live or Pre-match) */}
+                    <div className="bg-element-bg rounded-xl border border-border-subtle overflow-hidden">
+                        <div className="flex items-center justify-between p-4 border-b border-border-subtle bg-element-hover-bg/30">
+                            <div className="flex items-center gap-2">
+                                {activeTab === 'live' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+                                <h2 className="font-semibold text-text-contrast">{sectionTitle}</h2>
+                            </div>
+                            <Button variant="ghost" size="sm" className="text-xs">View All <ChevronRight size={14} /></Button>
+                        </div>
+
+                        <div className="p-2">
+                            {isLoading ? (
+                                <div className="p-8 text-center text-text-muted">Loading matches...</div>
+                            ) : matches && matches.length > 0 ? (
+                                matches.map((fixture: any) => (
+                                    <MatchCard key={fixture.fixture.id} fixture={fixture} />
+                                ))
+                            ) : (
+                                <div className="p-8 text-center text-text-muted">No matches currently available.</div>
+                            )}
                         </div>
                     </div>
                 </div>

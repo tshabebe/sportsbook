@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Create an Axios instance with default configuration
 export const api = axios.create({
-    baseURL: 'http://localhost:3001/api', // Corrected port and prefix
+    baseURL: 'http://localhost:3001/api', // Reverted to localhost for browser forwarding compatibility
     headers: {
         'Content-Type': 'application/json',
     },
