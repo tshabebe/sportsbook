@@ -1,13 +1,12 @@
-import { Home, User, Trophy, Disc, Target } from "lucide-react";
+import { User, Trophy, Target, Gamepad2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 export function BottomNav() {
     return (
         <div className="flex items-center justify-between px-4 py-3 bg-element-bg border-t border-border-subtle md:hidden">
-            <NavItem icon={<Disc size={20} />} label="Slots" />
-            <NavItem icon={<Target size={20} />} label="Casino" />
-            <NavItem icon={<Trophy size={20} />} label="Promo" />
-            <NavItem icon={<Home size={20} />} label="Sport" active />
+            <NavItem icon={<Trophy size={20} />} label="Sports" active />
+            <NavItem icon={<Gamepad2 size={20} />} label="Single" />
+            <NavItem icon={<Target size={20} />} label="Multi" />
             <NavItem icon={<User size={20} />} label="Profile" />
         </div>
     );

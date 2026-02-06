@@ -1,7 +1,6 @@
 import {
   pgTable,
   bigserial,
-  jsonb,
   text,
   timestamp,
   numeric,
@@ -10,15 +9,6 @@ import {
   index,
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
-
-export const oddsSnapshots = pgTable('odds_snapshots', {
-  id: bigserial('id', { mode: 'number' }).primaryKey(),
-  source: text('source').notNull(),
-  capturedAt: timestamp('captured_at', { withTimezone: true }).defaultNow().notNull(),
-  payload: jsonb('payload').notNull(),
-});
-
-export const oddsSnapshotsInsertSchema = createInsertSchema(oddsSnapshots);
 
 export const bets = pgTable(
   'bets',

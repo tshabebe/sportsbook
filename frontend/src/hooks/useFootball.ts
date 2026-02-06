@@ -5,18 +5,6 @@ import type { FixtureResponse, OddResponse, ApiFootballResponse } from "../types
 
 // --- Types for Custom Backend Responses ---
 
-interface PreMatchFixture {
-    fixture: { id: number; date: string; timestamp: number };
-    league: { id: number; season: number };
-    update: string;
-}
-
-interface WithOddsResponse {
-    ok: boolean;
-    fixtures: PreMatchFixture[];
-    checked: number;
-}
-
 interface League {
     id: number;
     name: string;
@@ -55,16 +43,60 @@ export const usePreMatchFixtures = (leagueId: number, pages: number = 1) => {
     return useQuery({
         queryKey: ["fixtures", "prematch", "with-odds", leagueId],
         queryFn: async () => {
-            const { data } = await api.get<WithOddsResponse>("/football/fixtures/with-odds", {
+            // 1. Fetch Fixtures
+            const { data: fixturesData } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
                 params: {
                     league: leagueId,
-                    pages: pages,
+                    next: 10,
+                    status: 'NS'
                 }
             });
-            return data.fixtures;
+
+            const fixtures = fixturesData.response || [];
+
+            // 2. Fetch Odds for each fixture (Parallel)
+            // Note: In a real high-scale app, we might want to batch this or use a more efficient endpoint if available.
+            // But for now, parallel requests against our cached proxy is fast.
+            const fixturesWithOdds = await Promise.all(fixtures.map(async (fixture) => {
+                try {
+                    const { data: oddsData } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds", {
+                        params: { fixture: fixture.fixture.id }
+                    });
+
+                    const oddsResponse = oddsData.response?.[0];
+                    let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
+
+                    if (oddsResponse && oddsResponse.bookmakers && oddsResponse.bookmakers.length > 0) {
+                        const bookmaker = oddsResponse.bookmakers[0]; // Take first bookmaker
+                        const matchWinner = bookmaker.bets?.find((b) => b.id === 1 || b.name === "Match Winner");
+
+                        if (matchWinner && matchWinner.values) {
+                            formattedOdds = {
+                                home: matchWinner.values.find((v) => v.value === "Home")?.odd || "1.00",
+                                draw: matchWinner.values.find((v) => v.value === "Draw")?.odd || "1.00",
+                                away: matchWinner.values.find((v) => v.value === "Away")?.odd || "1.00",
+                            };
+                        }
+                    }
+
+                    return {
+                        ...fixture,
+                        odds: formattedOdds
+                    };
+                } catch (e) {
+                    // Fallback if odds fetch fails
+                    console.error("Failed to fetch odds for fixture", fixture.fixture.id, e);
+                    return {
+                        ...fixture,
+                        odds: { home: "1.00", draw: "1.00", away: "1.00" }
+                    };
+                }
+            }));
+
+            return fixturesWithOdds;
         },
         enabled: !!leagueId,
-        staleTime: 0
+        staleTime: 60 * 1000 // Cache for 1 min client-side
     });
 };
 
@@ -79,11 +111,9 @@ export const useFixtureDetails = (fixtureId: number) => {
                 api.get<ApiFootballResponse<any>>("/football/fixtures/statistics", { params: { fixture: fixtureId } }),
                 // For H2H we need team IDs, but usually we fetch fixture info first. 
                 // To avoid waterfalls, we might split H2H. For now, let's just get the critical odds and stats.
-                // We can fetch H2H meaningfully only if we know the teams.
-                // Let's assume the UI calls a separate hook for H2H once it has the fixture data.
-                Promise.resolve({ data: { response: [] } }), // Placeholder for H2H if not chaining
+                Promise.resolve({ data: { response: [] } }), // Placeholder
                 api.get<ApiFootballResponse<any>>("/football/predictions", { params: { fixture: fixtureId } }),
-                api.get<ApiFootballResponse<any>>("/fixtures/events", { params: { fixture: fixtureId } }),
+                api.get<ApiFootballResponse<any>>("/football/fixtures/events", { params: { fixture: fixtureId } }), // updated path
                 api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", { params: { id: fixtureId } })
             ]);
 
@@ -120,7 +150,7 @@ export const useLiveFixtures = (leagueIds?: number[]) => {
             });
             return data.response;
         },
-        refetchInterval: 30000, // Poll every 30s
+        refetchInterval: 15000,
     });
 };
 
@@ -136,7 +166,7 @@ export const useLiveOdds = (leagueId?: number) => {
             });
             return data.response;
         },
-        refetchInterval: 10000, // Poll every 10s (volatile)
+        refetchInterval: 5000,
     });
 };
 
@@ -154,12 +184,12 @@ export const useLiveMatches = () => {
         let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
 
         if (liveOddsItem && liveOddsItem.bookmakers && liveOddsItem.bookmakers.length > 0) {
-            const matchWinner = liveOddsItem.bookmakers[0].bets?.find((b: any) => b.id === 1 || b.name === "Match Winner");
+            const matchWinner = liveOddsItem.bookmakers[0].bets?.find((b: { id: number; name: string }) => b.id === 1 || b.name === "Match Winner");
             if (matchWinner) {
                 formattedOdds = {
-                    home: matchWinner.values.find((v: any) => v.value === "Home")?.odd || "1.00",
-                    draw: matchWinner.values.find((v: any) => v.value === "Draw")?.odd || "1.00",
-                    away: matchWinner.values.find((v: any) => v.value === "Away")?.odd || "1.00",
+                    home: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Home")?.odd || "1.00",
+                    draw: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Draw")?.odd || "1.00",
+                    away: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Away")?.odd || "1.00",
                 };
             }
         }
@@ -181,15 +211,13 @@ export const useTopLeagues = () => {
     return useQuery({
         queryKey: ["leagues", "popular"],
         queryFn: async () => {
-            console.log("Fetching popular leagues...");
             const { data } = await api.get<PopularLeaguesResponse>("/football/leagues/popular");
-            console.log("Popular leagues response:", data);
             if (data.ok) {
                 return data.leagues;
             }
             throw new Error("Failed to fetch popular leagues");
         },
-        staleTime: 0, // Disable cache for debugging to ensure fresh fetch
+        staleTime: 60 * 60 * 1000,
     });
 };
 

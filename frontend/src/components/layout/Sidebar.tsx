@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Search, Trophy, Dices, Star, Gamepad2, DollarSign, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronRight, Search, Trophy, Dices, Gamepad2 } from "lucide-react";
 
 interface SidebarItem {
     id: string;
@@ -10,32 +10,23 @@ interface SidebarItem {
 
 const sidebarItems: SidebarItem[] = [
     { id: "search", label: "Search", icon: <Search size={16} /> },
-    { id: "all-sports", label: "All Sports", icon: <Trophy size={16} /> },
     {
         id: "sportsbook",
         label: "Sportsbook",
-        icon: <Star size={16} />,
-        children: [
-            { id: "football", label: "Football", icon: <ChevronRight size={16} /> },
-            { id: "basketball", label: "Basketball", icon: <ChevronRight size={16} /> },
-            { id: "tennis", label: "Tennis", icon: <ChevronRight size={16} /> },
-        ],
-    },
-    { id: "live-casino", label: "Live Casino", icon: <Gamepad2 size={16} /> },
-    { id: "casino-games", label: "Casino Games", icon: <Dices size={16} /> },
-    { id: "slots", label: "Slots", icon: <Dices size={16} /> },
-    { id: "live-events", label: "Live Events", icon: <TrendingUp size={16} /> },
-    { id: "bet-builder", label: "Bet Builder", icon: <Star size={16} /> },
-    {
-        id: "sports-games",
-        label: "Sports Games",
         icon: <Trophy size={16} />,
         children: [
-            { id: "live", label: "Live", icon: <ChevronRight size={16} /> },
-            { id: "upcoming", label: "Upcoming", icon: <ChevronRight size={16} /> },
+            { id: "football", label: "Football", icon: <ChevronRight size={16} /> },
         ],
     },
-    { id: "weekly-promo", label: "Weekly Promotions", icon: <DollarSign size={16} /> },
+    {
+        id: "singleplayer",
+        label: "Singleplayer",
+        icon: <Gamepad2 size={16} />,
+        children: [
+            { id: "crash", label: "Crash", icon: <ChevronRight size={16} /> },
+        ],
+    },
+    { id: "multiplayer", label: "Multiplayer Games", icon: <Dices size={16} /> },
 ];
 
 export function Sidebar() {

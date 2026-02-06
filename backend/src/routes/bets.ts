@@ -4,7 +4,6 @@ import { betSlipSchema } from '../validation/bets';
 import {
   createBetWithSelections,
   getBetWithSelections,
-  getLatestOddsSnapshotForFixture,
   getExposureForOutcome,
   listBetsWithSelections,
   listPendingBetsByFixture,
@@ -13,6 +12,7 @@ import {
 import { walletClient } from '../services/walletClient';
 import { config } from '../services/config';
 import { checkMaxPayout, checkOddsRange, checkStake } from '../services/risk';
+import { apiFootball } from '../services/apiFootball';
 
 export const router = Router();
 
@@ -117,31 +117,6 @@ const extractToken = (req: Request): string | null => {
   return header.slice('Bearer '.length).trim();
 };
 
-const extractSelectionMatchFromSnapshot = (
-  snapshot: unknown,
-  selection: {
-    betId?: number | string;
-    value: string;
-    odd: number;
-    bookmakerId?: number;
-    handicap?: string | number;
-  },
-  fixtureId: number,
-): boolean => {
-  if (!snapshot || typeof snapshot !== 'object') return false;
-  const response = (snapshot as { response?: unknown }).response;
-  if (!Array.isArray(response)) return false;
-  const fixtureItems = response.filter(
-    (item) => Number(item?.fixture?.id) === Number(fixtureId),
-  );
-  for (const item of fixtureItems) {
-    if (extractOddMatch([item], selection)) {
-      return true;
-    }
-  }
-  return false;
-};
-
 const extractSelectionDetailsFromSnapshot = (
   snapshot: unknown,
   selection: {
@@ -183,23 +158,6 @@ const extractSelectionDetailsFromSnapshot = (
   return { found: false };
 };
 
-const isSnapshotStale = (capturedAt: string): boolean => {
-  const captured = Date.parse(capturedAt);
-  if (Number.isNaN(captured)) return true;
-  const ageSeconds = (Date.now() - captured) / 1000;
-  return ageSeconds > config.risk.snapshotMaxAgeSeconds;
-};
-
-const isFixtureInPlay = (snapshot: unknown, fixtureId: number): boolean => {
-  if (!snapshot || typeof snapshot !== 'object') return false;
-  const response = (snapshot as { response?: unknown }).response;
-  if (!Array.isArray(response)) return false;
-  const item = response.find((row) => Number(row?.fixture?.id) === Number(fixtureId));
-  const status = String(item?.fixture?.status?.short ?? '').toUpperCase();
-  const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE']);
-  return inPlayStatuses.has(status);
-};
-
 router.post('/betslip/validate', async (req: Request, res: Response) => {
   try {
     const parsed = betSlipSchema.safeParse(req.body);
@@ -227,38 +185,53 @@ router.post('/betslip/validate', async (req: Request, res: Response) => {
 
     const results = await Promise.all(
       slip.selections.map(async (selection) => {
-        const snapshot = await getLatestOddsSnapshotForFixture(selection.fixtureId);
-        if (!snapshot) {
+        // Validation now checks against the latest cached/live odds via the proxy
+        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
+
+        if (!oddsData || !oddsData.response || !oddsData.response.length) {
+          // If we can't find odds, we check if it's because the game started or just missing data
+          // For simplification, we might fail here or check fixture status
           return {
             selection,
             ok: false,
-            error: { code: 'SNAPSHOT_MISSING', message: 'Odds snapshot not available' },
+            error: { code: 'ODDS_UNAVAILABLE', message: 'Odds currently unavailable for this fixture' },
           };
         }
-        if (isSnapshotStale(snapshot.capturedAt)) {
+
+        const oddsResponse = oddsData.response[0]; // Assuming one fixture per response when queried by ID
+
+        // Validate fixture status (In-Play check)
+        // We might need to fetch fixture status separately if not included in odds, 
+        // but typically odds endpoint doesn't return status. 
+        // Ideally, we should check /fixtures status here too.
+        // For this streamlined version, we will assume if odds are live/available, it's valid, 
+        // but let's do a quick fixture status check to prevent betting on finished games if possible.
+        // Optimization: The proxy caches /fixtures quickly.
+        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
+        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT', 'AET', 'PEN']);
+
+        // If status is FINISHED or IN_PLAY (and this is a pre-match validator), reject.
+        // Note: The previous logic checked 'LIVE' etc.
+        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
           return {
             selection,
             ok: false,
-            error: { code: 'SNAPSHOT_STALE', message: 'Odds snapshot is stale' },
+            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
           };
         }
-        if (isFixtureInPlay(snapshot.payload, selection.fixtureId)) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'IN_PLAY', message: 'Fixture already in play' },
-          };
-        }
+
         const detail = extractSelectionDetailsFromSnapshot(
-          snapshot.payload,
+          oddsData, // passing the full response object which matches the "snapshot" structure
           selection,
           selection.fixtureId,
         );
+
         if (!detail.found) {
           return {
             selection,
             ok: false,
-            error: { code: 'ODDS_CHANGED', message: 'Odds changed since selection' },
+            error: { code: 'ODDS_CHANGED', message: 'Odds changed or selection no longer available' },
           };
         }
         if (detail.suspended) {
@@ -332,26 +305,28 @@ router.post('/betslip/place', async (req: Request, res: Response) => {
 
     const validation = await Promise.all(
       slip.selections.map(async (selection) => {
-        const snapshot = await getLatestOddsSnapshotForFixture(selection.fixtureId);
-        if (!snapshot) {
-          return { selection, ok: false, reason: 'Snapshot not available' };
+        // Place bet validation: re-check against current proxy odds
+        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
+
+        // Similar validation to /validate
+        if (!oddsData || !oddsData.response || !oddsData.response.length) {
+          return { selection, ok: false, reason: 'Odds unavailable' };
         }
-        if (isSnapshotStale(snapshot.capturedAt)) {
+
+        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
+        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT']);
+
+        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
           return {
             selection,
             ok: false,
-            error: { code: 'SNAPSHOT_STALE', message: 'Odds snapshot is stale' },
+            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
           };
         }
-        if (isFixtureInPlay(snapshot.payload, selection.fixtureId)) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'IN_PLAY', message: 'Fixture already in play' },
-          };
-        }
+
         const detail = extractSelectionDetailsFromSnapshot(
-          snapshot.payload,
+          oddsData,
           selection,
           selection.fixtureId,
         );

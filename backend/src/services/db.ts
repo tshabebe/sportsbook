@@ -1,8 +1,6 @@
 import { sql, desc, eq } from 'drizzle-orm';
 import { getDb } from '../db/connection';
 import {
-  oddsSnapshots,
-  oddsSnapshotsInsertSchema,
   bets,
   betSelections,
   betsInsertSchema,
@@ -11,21 +9,12 @@ import {
 import type { BetSlipInput } from '../validation/bets';
 
 let schemaEnsured = false;
-const memorySnapshots: Array<{ source: string; capturedAt: string; payload: unknown }> = [];
-const MAX_MEMORY_SNAPSHOTS = 200;
 
 const ensureSchema = async (): Promise<void> => {
   if (schemaEnsured) return;
   const db = getDb();
   if (!db) return;
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS odds_snapshots (
-      id BIGSERIAL PRIMARY KEY,
-      source TEXT NOT NULL,
-      captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      payload JSONB NOT NULL
-    );
-  `);
+  // Note: Odds Snapshots table removed as part of simplification
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS bets (
       id BIGSERIAL PRIMARY KEY,
@@ -62,72 +51,6 @@ const ensureSchema = async (): Promise<void> => {
   await db.execute(sql`CREATE INDEX IF NOT EXISTS bet_selections_fixture_idx ON bet_selections (fixture_id);`);
   await db.execute(sql`CREATE INDEX IF NOT EXISTS bet_selections_bet_idx ON bet_selections (bet_id);`);
   schemaEnsured = true;
-};
-
-export const storeOddsSnapshot = async (
-  source: string,
-  payload: unknown,
-): Promise<void> => {
-  memorySnapshots.unshift({ source, capturedAt: new Date().toISOString(), payload });
-  if (memorySnapshots.length > MAX_MEMORY_SNAPSHOTS) {
-    memorySnapshots.length = MAX_MEMORY_SNAPSHOTS;
-  }
-  const db = getDb();
-  if (!db) return;
-  await ensureSchema();
-  const parsed = oddsSnapshotsInsertSchema.parse({
-    source,
-    payload,
-  });
-  await db.insert(oddsSnapshots).values(parsed);
-};
-
-export const getLatestOddsSnapshotForFixture = async (
-  fixtureId: number,
-): Promise<{ id: number; payload: unknown; capturedAt: string } | null> => {
-  try {
-    const db = getDb();
-    if (!db) {
-      return findSnapshotInMemory(fixtureId);
-    }
-    await ensureSchema();
-    const rows = await db.execute(sql`
-      SELECT id, payload, captured_at
-      FROM odds_snapshots
-      WHERE jsonb_path_exists(payload, ${`$.response[*].fixture.id ? (@ == ${fixtureId})`})
-      ORDER BY id DESC
-      LIMIT 1
-    `);
-    const first = (rows as unknown as {
-      rows: Array<{ id: number; payload: unknown; captured_at: string }>;
-    }).rows?.[0];
-    if (!first) return null;
-    return {
-      id: first.id,
-      payload: first.payload,
-      capturedAt: first.captured_at,
-    };
-  } catch (err) {
-    console.error('Failed to load odds snapshot', err);
-    return findSnapshotInMemory(fixtureId);
-  }
-};
-
-const findSnapshotInMemory = (
-  fixtureId: number,
-): { id: number; payload: unknown; capturedAt: string } | null => {
-  for (let i = 0; i < memorySnapshots.length; i += 1) {
-    const entry = memorySnapshots[i];
-    const payload = entry?.payload as { response?: unknown } | undefined;
-    const response = Array.isArray(payload?.response) ? payload?.response : [];
-    const hasFixture = response.some(
-      (item) => Number(item?.fixture?.id) === Number(fixtureId),
-    );
-    if (hasFixture) {
-      return { id: -1, payload: entry.payload, capturedAt: entry.capturedAt };
-    }
-  }
-  return null;
 };
 
 export const createBetWithSelections = async (
