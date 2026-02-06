@@ -33,7 +33,7 @@ export function Button({ className, variant, size, ...props }: ButtonProps) {
     return (
         <RACButton
             {...props}
-            className={composeRenderProps(className, (className, renderProps) =>
+            className={composeRenderProps(className, (className) =>
                 cn(buttonVariants({ variant, size, className }))
             )}
         />

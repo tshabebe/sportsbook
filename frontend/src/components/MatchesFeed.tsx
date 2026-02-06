@@ -11,7 +11,7 @@ export function MatchesFeed() {
     const { data: liveMatches, isLoading: isLiveLoading } = useLiveMatches();
 
     // Pre-match Data (Defaults to Premier League - 39 for now)
-    const { data: preMatchMatches, isLoading: isPreMatchLoading } = usePreMatchFixtures(39, 1);
+    const { data: preMatchMatches, isLoading: isPreMatchLoading } = usePreMatchFixtures(39);
 
     // Derived State
     const isLoading = activeTab === 'live' ? isLiveLoading : isPreMatchLoading;

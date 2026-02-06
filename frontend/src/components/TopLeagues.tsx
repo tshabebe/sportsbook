@@ -1,5 +1,5 @@
-import { ChevronRight } from "lucide-react";
-import { Button } from "./ui/Button";
+// import { ChevronRight } from "lucide-react";
+// import { Button } from "./ui/Button";
 import { useTopLeagues } from "../hooks/useFootball";
 
 export function TopLeagues() {

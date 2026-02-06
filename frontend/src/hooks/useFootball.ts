@@ -5,6 +5,14 @@ import type { FixtureResponse, OddResponse, ApiFootballResponse } from "../types
 
 // --- Types for Custom Backend Responses ---
 
+export interface Fixture extends Omit<FixtureResponse, 'odds'> {
+    odds: {
+        home: string;
+        draw: string;
+        away: string;
+    };
+}
+
 interface League {
     id: number;
     name: string;
@@ -39,7 +47,7 @@ export const useFixturesSchedule = (leagueId: number, status: string = "NS", nex
 };
 
 // 1. Pre-Match (Home Page) - The "Betting Site" Way (Filtered with Odds)
-export const usePreMatchFixtures = (leagueId: number, pages: number = 1) => {
+export const usePreMatchFixtures = (leagueId: number) => {
     return useQuery({
         queryKey: ["fixtures", "prematch", "with-odds", leagueId],
         queryFn: async () => {
@@ -106,7 +114,7 @@ export const useFixtureDetails = (fixtureId: number) => {
         queryKey: ["fixture", "details", fixtureId],
         queryFn: async () => {
             // Parallel execution for rich context
-            const [oddsRes, statsRes, h2hRes, predictionsRes, eventsRes, fixtureRes] = await Promise.all([
+            const [oddsRes, statsRes, , predictionsRes, eventsRes, fixtureRes] = await Promise.all([
                 api.get<ApiFootballResponse<OddResponse>>("/football/odds", { params: { fixture: fixtureId } }),
                 api.get<ApiFootballResponse<any>>("/football/fixtures/statistics", { params: { fixture: fixtureId } }),
                 // For H2H we need team IDs, but usually we fetch fixture info first. 
