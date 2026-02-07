@@ -59,10 +59,24 @@ export function HomePage() {
             {/* View Toggle Tabs */}
             <div className="flex gap-4 bg-[#1d1d1d] p-1 rounded-xl">
                 <button onClick={() => setActiveTab('prematch')} className={getTabClass('prematch')}>
-                    Pre-Match
+                    <div className="flex items-center justify-center gap-2">
+                        <span>Pre-Match</span>
+                        {preMatchFixtures && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === 'prematch' ? 'bg-[#1d1d1d] text-[#ffd60a]' : 'bg-[#333] text-[#c8c8c8]'}`}>
+                                {preMatchFixtures.length}
+                            </span>
+                        )}
+                    </div>
                 </button>
                 <button onClick={() => setActiveTab('live')} className={getTabClass('live')}>
-                    Live Events
+                    <div className="flex items-center justify-center gap-2">
+                        <span>Live Events</span>
+                        {liveFixtures && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === 'live' ? 'bg-[#1d1d1d] text-[#ffd60a]' : 'bg-[#333] text-[#c8c8c8]'}`}>
+                                {liveFixtures.length}
+                            </span>
+                        )}
+                    </div>
                 </button>
             </div>
 
@@ -71,8 +85,8 @@ export function HomePage() {
                 <button
                     onClick={() => setSelectedLeagueId(null)}
                     className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors border ${selectedLeagueId === null
-                            ? 'bg-[#fafafa] text-[#1d1d1d] border-[#fafafa]'
-                            : 'bg-[#1d1d1d] text-[#c8c8c8] border-[#333] hover:border-[#666]'
+                        ? 'bg-[#fafafa] text-[#1d1d1d] border-[#fafafa]'
+                        : 'bg-[#1d1d1d] text-[#c8c8c8] border-[#333] hover:border-[#666]'
                         }`}
                 >
                     ALL LEAGUES
@@ -89,8 +103,8 @@ export function HomePage() {
                         key={league.id}
                         onClick={() => setSelectedLeagueId(league.id)}
                         className={`shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-colors border ${selectedLeagueId === league.id
-                                ? 'bg-[#ffd60a] text-[#1d1d1d] border-[#ffd60a]'
-                                : 'bg-[#1d1d1d] text-[#c8c8c8] border-[#333] hover:border-[#666]'
+                            ? 'bg-[#ffd60a] text-[#1d1d1d] border-[#ffd60a]'
+                            : 'bg-[#1d1d1d] text-[#c8c8c8] border-[#333] hover:border-[#666]'
                             }`}
                     >
                         {league.name}

@@ -73,9 +73,16 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
                     <OddButton label="2" odd={awayOdd} onClick={(e) => handleOddClick(e, '2')} />
                 </div>
 
-                {/* More Markets Arrow */}
-                <div className="w-8 flex justify-center text-[#c8c8c8] group-hover:text-[#ffd60a]">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                {/* Plus Button for More Markets */}
+                <div
+                    onClick={handleRowClick}
+                    className="w-8 flex items-center justify-center cursor-pointer group/plus"
+                >
+                    <div className="w-6 h-6 rounded border border-[#333] flex items-center justify-center bg-[#1d1d1d] group-hover/plus:bg-[#333] transition-colors">
+                        <svg className="w-4 h-4 text-[#c8c8c8] group-hover/plus:text-[#ffd60a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
+                        </svg>
+                    </div>
                 </div>
             </div>
 

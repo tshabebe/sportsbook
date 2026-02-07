@@ -55,7 +55,7 @@ export const usePreMatchFixtures = (leagueId: number) => {
             const { data: fixturesData } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
                 params: {
                     league: leagueId,
-                    next: 10,
+                    next: 50,
                     status: 'NS'
                 }
             });
