@@ -61,21 +61,11 @@ export function HomePage() {
                 <button onClick={() => setActiveTab('prematch')} className={getTabClass('prematch')}>
                     <div className="flex items-center justify-center gap-2">
                         <span>Pre-Match</span>
-                        {preMatchFixtures && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === 'prematch' ? 'bg-[#1d1d1d] text-[#ffd60a]' : 'bg-[#333] text-[#c8c8c8]'}`}>
-                                {preMatchFixtures.length}
-                            </span>
-                        )}
                     </div>
                 </button>
                 <button onClick={() => setActiveTab('live')} className={getTabClass('live')}>
                     <div className="flex items-center justify-center gap-2">
                         <span>Live Events</span>
-                        {liveFixtures && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${activeTab === 'live' ? 'bg-[#1d1d1d] text-[#ffd60a]' : 'bg-[#333] text-[#c8c8c8]'}`}>
-                                {liveFixtures.length}
-                            </span>
-                        )}
                     </div>
                 </button>
             </div>

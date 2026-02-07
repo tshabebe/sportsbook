@@ -25,10 +25,8 @@ export function LeagueGroup({ leagueName, countryFlag, fixtures, defaultExpanded
             >
                 <div className="flex items-center gap-3">
                     {logoUrl && <img src={logoUrl} alt={leagueName} className="w-5 h-5 object-contain" />}
-                    <h3 className="text-[#fafafa] font-semibold text-[14px]">{leagueName}</h3>
-                    <span className="bg-[#1d1d1d] text-[#c8c8c8] text-[10px] px-2 py-0.5 rounded-full border border-[#333]">
-                        {fixtures.length}
-                    </span>
+                    <h3 className="text-[#fafafa] font-semibold text-[14px]">{leagueName} <span className="text-[#666] ml-1">({fixtures.length})</span></h3>
+
                 </div>
 
                 {/* Chevron */}
