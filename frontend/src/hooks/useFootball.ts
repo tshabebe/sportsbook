@@ -46,60 +46,121 @@ export const useFixturesSchedule = (leagueId: number, status: string = "NS", nex
     });
 };
 
-// 1. Pre-Match (Home Page) - The "Betting Site" Way (Filtered with Odds)
+// 1. Pre-Match (Home Page) - Option B: Odds-First (Efficient)
+// Fetches odds with pagination → extracts fixture IDs → bulk fetches fixtures
+// This is more efficient than N+1 calls (2-4 calls vs 31+ calls)
 export const usePreMatchFixtures = (leagueId: number) => {
     return useQuery({
         queryKey: ["fixtures", "prematch", "with-odds", leagueId],
         queryFn: async () => {
-            // 1. Fetch Fixtures
-            const { data: fixturesData } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
-                params: {
-                    league: leagueId,
-                    next: 50,
-                    status: 'NS'
-                }
+            // 1. Get current season dynamically
+            const { data: leagueData } = await api.get<ApiFootballResponse<any>>("/football/leagues", {
+                params: { id: leagueId, current: true }
             });
 
-            const fixtures = fixturesData.response || [];
+            const currentSeason = leagueData.response?.[0]?.seasons?.find(
+                (s: { current: boolean }) => s.current
+            )?.year;
 
-            // 2. Fetch Odds for each fixture (Parallel)
-            // Note: In a real high-scale app, we might want to batch this or use a more efficient endpoint if available.
-            // But for now, parallel requests against our cached proxy is fast.
-            const fixturesWithOdds = await Promise.all(fixtures.map(async (fixture) => {
-                try {
-                    const { data: oddsData } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds", {
-                        params: { fixture: fixture.fixture.id }
-                    });
+            if (!currentSeason) {
+                console.warn("Could not determine current season for league", leagueId);
+                return [];
+            }
 
-                    const oddsResponse = oddsData.response?.[0];
-                    let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
+            // 2. Fetch ALL pages of odds (Bet365 only, bookmaker=8)
+            const allOddsResponses: OddResponse[] = [];
+            let currentPage = 1;
+            let totalPages = 1;
 
-                    if (oddsResponse && oddsResponse.bookmakers && oddsResponse.bookmakers.length > 0) {
-                        const bookmaker = oddsResponse.bookmakers[0]; // Take first bookmaker
-                        const matchWinner = bookmaker.bets?.find((b) => b.id === 1 || b.name === "Match Winner");
-
-                        if (matchWinner && matchWinner.values) {
-                            formattedOdds = {
-                                home: matchWinner.values.find((v) => v.value === "Home")?.odd || "1.00",
-                                draw: matchWinner.values.find((v) => v.value === "Draw")?.odd || "1.00",
-                                away: matchWinner.values.find((v) => v.value === "Away")?.odd || "1.00",
-                            };
-                        }
+            do {
+                const { data: oddsData } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds", {
+                    params: {
+                        league: leagueId,
+                        season: currentSeason,
+                        bookmaker: 8,  // Bet365 only
+                        page: currentPage
                     }
+                });
 
-                    return {
-                        ...fixture,
-                        odds: formattedOdds
-                    };
-                } catch (e) {
-                    // Fallback if odds fetch fails
-                    console.error("Failed to fetch odds for fixture", fixture.fixture.id, e);
-                    return {
-                        ...fixture,
-                        odds: { home: "1.00", draw: "1.00", away: "1.00" }
-                    };
+                if (oddsData.response) {
+                    allOddsResponses.push(...oddsData.response);
                 }
-            }));
+                totalPages = oddsData.paging?.total || 1;
+                currentPage++;
+            } while (currentPage <= totalPages);
+
+            if (allOddsResponses.length === 0) {
+                return [];
+            }
+
+            // 3. Extract fixture IDs and odds data (filter for upcoming only)
+            const now = new Date();
+            const fixtureOddsMap = new Map<number, { home: string; draw: string; away: string }>();
+            const fixtureIds: number[] = [];
+
+            for (const odds of allOddsResponses) {
+                const fixtureId = odds.fixture?.id;
+                const fixtureDate = odds.fixture?.date ? new Date(odds.fixture.date) : null;
+
+                // Skip past fixtures
+                if (!fixtureId || !fixtureDate || fixtureDate < now) continue;
+
+                fixtureIds.push(fixtureId);
+
+                // Extract 1x2 odds from Bet365
+                let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
+                const bookmaker = odds.bookmakers?.[0];
+
+                if (bookmaker) {
+                    const matchWinner = bookmaker.bets?.find(
+                        (b: { id: number; name: string }) => b.id === 1 || b.name === "Match Winner"
+                    );
+
+                    if (matchWinner?.values) {
+                        formattedOdds = {
+                            home: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Home")?.odd || "1.00",
+                            draw: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Draw")?.odd || "1.00",
+                            away: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Away")?.odd || "1.00",
+                        };
+                    }
+                }
+
+                fixtureOddsMap.set(fixtureId, formattedOdds);
+            }
+
+            if (fixtureIds.length === 0) {
+                return [];
+            }
+
+            // 4. Fetch fixtures in bulk (max 20 per call)
+            const allFixtures: FixtureResponse[] = [];
+            const CHUNK_SIZE = 20;
+
+            for (let i = 0; i < fixtureIds.length; i += CHUNK_SIZE) {
+                const chunk = fixtureIds.slice(i, i + CHUNK_SIZE);
+                const idsParam = chunk.join("-");
+
+                const { data: fixturesData } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
+                    params: { ids: idsParam }
+                });
+
+                if (fixturesData.response) {
+                    allFixtures.push(...fixturesData.response);
+                }
+            }
+
+            // 5. Merge fixtures with odds and filter for NS status
+            const fixturesWithOdds: Fixture[] = allFixtures
+                .filter(f => f.fixture.status.short === "NS")
+                .map(fixture => ({
+                    ...fixture,
+                    odds: fixtureOddsMap.get(fixture.fixture.id) || { home: "1.00", draw: "1.00", away: "1.00" }
+                }));
+
+            // 6. Sort by date (earliest first)
+            fixturesWithOdds.sort((a, b) =>
+                new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime()
+            );
 
             return fixturesWithOdds;
         },
