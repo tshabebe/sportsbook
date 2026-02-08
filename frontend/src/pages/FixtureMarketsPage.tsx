@@ -138,10 +138,15 @@ export function FixtureMarketsPage() {
                                         addToBetSlip({
                                             id: selectionId,
                                             fixtureId: fixture.id,
+                                            betId: market.id,
+                                            value: outcome.value,
+                                            odd: Number(outcome.odd),
+                                            handicap: outcome.handicap,
+                                            bookmakerId: fixtureData.bookmakers?.[0]?.id,
                                             fixtureName: "Fixture Name Placeholder",
                                             marketName: market.name,
                                             selectionName: outcome.value,
-                                            odds: outcome.odd
+                                            odds: Number(outcome.odd)
                                         });
                                     }}
                                 />

@@ -1,12 +1,12 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
+import type { BetSelectionInput, BetSlipInput } from '../types/backendSchemas';
 
-export interface Bet {
+export interface Bet extends BetSelectionInput {
     id: string; // Unique ID (fixtureId-marketId-outcomeId)
-    fixtureId: number;
     fixtureName: string; // e.g., "Team A vs Team B"
     marketName: string;
     selectionName: string; // e.g., "Team A"
-    odds: string; // e.g., "2.50"
+    odds: number;
     stake?: number;
 }
 
@@ -17,6 +17,7 @@ interface BetSlipContextType {
     clearBetSlip: () => void;
     isOpen: boolean;
     toggleBetSlip: () => void;
+    toBetSlipInput: (stake: number) => BetSlipInput;
 }
 
 const BetSlipContext = createContext<BetSlipContextType | undefined>(undefined);
@@ -45,8 +46,20 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
         setIsOpen(prev => !prev);
     };
 
+    const toBetSlipInput = (stake: number): BetSlipInput => ({
+        stake,
+        selections: bets.map((bet) => ({
+            fixtureId: bet.fixtureId,
+            betId: bet.betId,
+            value: bet.value,
+            odd: bet.odd,
+            handicap: bet.handicap,
+            bookmakerId: bet.bookmakerId,
+        })),
+    });
+
     return (
-        <BetSlipContext.Provider value={{ bets, addToBetSlip, removeFromBetSlip, clearBetSlip, isOpen, toggleBetSlip }}>
+        <BetSlipContext.Provider value={{ bets, addToBetSlip, removeFromBetSlip, clearBetSlip, isOpen, toggleBetSlip, toBetSlipInput }}>
             {children}
         </BetSlipContext.Provider>
     );

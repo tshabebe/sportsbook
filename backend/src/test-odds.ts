@@ -20,12 +20,12 @@ interface FetchResult {
     oddsDetails: { id: number; hasOdds: boolean; bookmakers?: string[] }[];
 }
 
-async function fetchFromAPI(endpoint: string, params: Record<string, string>) {
+async function fetchFromAPI(endpoint: string, params: Record<string, string>): Promise<any> {
     const url = new URL(`${BASE_URL}${endpoint}`);
     Object.entries(params).forEach(([k, v]) => url.searchParams.append(k, v));
 
     const res = await fetch(url.toString());
-    return res.json();
+    return res.json() as Promise<any>;
 }
 
 async function checkOddsForFixture(fixtureId: number): Promise<{ hasOdds: boolean; bookmakers: string[] }> {

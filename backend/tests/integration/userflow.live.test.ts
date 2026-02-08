@@ -59,32 +59,12 @@ describe('user flow live integration', () => {
         }
       }
 
-      // fallback to fixtures with odds if first fixture has no odds
-      if (!oddsResponse) {
-        const fixturesWithOdds = await requiredGet(
-          `/api/football/fixtures/with-odds?league=${leagueId}&pages=2&max_checks=20`,
-        );
-        const candidates = fixturesWithOdds.body?.fixtures ?? [];
-        for (const fixture of candidates) {
-          const id = Number(fixture?.fixture?.id);
-          if (!Number.isFinite(id)) continue;
-          const res = await request(app).get(`/api/football/odds?fixture=${id}`);
-          if (res.status !== 200) continue;
-          if (Array.isArray(res.body?.response) && res.body.response.length > 0) {
-            oddsResponse = res;
-            fixtureId = id;
-            break;
-          }
-        }
-      }
-
       if (!oddsResponse || !fixtureId) {
         console.log('[userflow] no fixtures with actual odds');
         return;
       }
 
       // 4) Match Detail Page (pre‑match)
-      await requiredGet(`/api/markets/${fixtureId}`);
       const fixtureDetails = await requiredGet(`/api/football/fixtures?ids=${fixtureId}`);
       const fixtureDetailItem = Array.isArray(fixtureDetails.body?.response)
         ? fixtureDetails.body.response[0]
@@ -161,7 +141,7 @@ describe('user flow live integration', () => {
       console.log('[userflow] validate', JSON.stringify(validateResponse.body));
       if (!validateResponse.body?.ok) {
         const firstError = validateResponse.body?.results?.[0]?.error?.code;
-        if (firstError === 'SNAPSHOT_STALE' && fixtureId) {
+        if (firstError === 'ODDS_CHANGED' && fixtureId) {
           await request(app).get(`/api/football/odds?fixture=${fixtureId}`);
           const retry = await request(app)
             .post('/api/betslip/validate')

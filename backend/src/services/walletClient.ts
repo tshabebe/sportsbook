@@ -1,4 +1,5 @@
 import { config } from './config';
+import { HttpError } from '../lib/http';
 
 type WalletTransactionType = 'debit' | 'credit';
 
@@ -34,7 +35,18 @@ export class WalletClient {
     };
   }
 
+  private assertConfigured() {
+    if (!this.baseUrl || !this.apiKey) {
+      throw new HttpError(
+        503,
+        'WALLET_UNAVAILABLE',
+        'Wallet integration is not configured',
+      );
+    }
+  }
+
   async getProfile(token: string) {
+    this.assertConfigured();
     const response = await fetch(`${this.baseUrl}/api/wallet/profile`, {
       headers: this.getHeaders(token),
     });
@@ -50,6 +62,7 @@ export class WalletClient {
     transactionType: WalletTransactionType,
     data: WalletTransactionPayload,
   ) {
+    this.assertConfigured();
     const payload: WalletTransactionPayload = {
       user_id: data.user_id || data.chatId,
       username: data.username,

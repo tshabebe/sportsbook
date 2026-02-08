@@ -1,5 +1,6 @@
 import { config } from './config';
 import { cacheGet, cacheSet } from './cache';
+import { HttpError } from '../lib/http';
 
 type ApiFootballResponse<T> = {
   get: string;
@@ -78,7 +79,7 @@ const buildCacheKey = (
 
 const getHeaders = (): Record<string, string> => {
   if (!config.apiFootballKey) {
-    throw new Error('Missing API_FOOTBALL_KEY');
+    throw new HttpError(503, 'API_FOOTBALL_UNAVAILABLE', 'Missing API_FOOTBALL_KEY');
   }
   return {
     'x-apisports-key': config.apiFootballKey,
@@ -103,7 +104,11 @@ const fetchJson = async <T>(url: string): Promise<ApiFootballResponse<T>> => {
   if (!response.ok) {
     const text = await response.text();
     // 499 is API-Sports timeout, treat as error
-    throw new Error(`API-Football error ${response.status}: ${text}`);
+    throw new HttpError(
+      502,
+      'UPSTREAM_API_FOOTBALL_ERROR',
+      `API-Football error ${response.status}: ${text}`,
+    );
   }
   return (await response.json()) as ApiFootballResponse<T>;
 };

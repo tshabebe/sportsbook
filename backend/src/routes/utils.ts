@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import { HttpError } from '../lib/http';
 
 export const normalizeQuery = (
   query: Request['query'],
@@ -13,4 +14,18 @@ export const normalizeQuery = (
     normalized[key] = String(value);
   });
   return normalized;
+};
+
+export const extractBearerToken = (req: Request): string | null => {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) return null;
+  return header.slice('Bearer '.length).trim();
+};
+
+export const requireBearerToken = (req: Request): string => {
+  const token = extractBearerToken(req);
+  if (!token) {
+    throw new HttpError(401, 'UNAUTHORIZED', 'Missing Bearer token');
+  }
+  return token;
 };

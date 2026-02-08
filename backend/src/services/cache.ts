@@ -1,55 +1,40 @@
-import { createClient, RedisClientType } from 'redis';
 import { config } from './config';
 
-type CacheValue = {
-  value: string;
-  expiresAt: number;
+type UpstashResponse<T> = {
+  result?: T;
+  error?: string;
 };
 
-class MemoryCache {
-  private store = new Map<string, CacheValue>();
+const upstashBaseUrl = config.upstashRedisRestUrl.replace(/\/+$/, '');
 
-  get(key: string): string | null {
-    const entry = this.store.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
-      this.store.delete(key);
-      return null;
-    }
-    return entry.value;
-  }
-
-  set(key: string, value: string, ttlSeconds: number): void {
-    const expiresAt = Date.now() + ttlSeconds * 1000;
-    this.store.set(key, { value, expiresAt });
-  }
-}
-
-const memoryCache = new MemoryCache();
-let redisClient: RedisClientType | null = null;
-
-const ensureRedis = async (): Promise<RedisClientType | null> => {
-  if (!config.redisUrl) return null;
-  if (redisClient) return redisClient;
-  redisClient = createClient({ url: config.redisUrl });
-  redisClient.on('error', (err) => {
-    console.error('Redis error', err);
+const executeUpstash = async <T>(
+  command: Array<string | number>,
+): Promise<T | null> => {
+  const response = await fetch(upstashBaseUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.upstashRedisRestToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(command),
   });
-  await redisClient.connect();
-  return redisClient;
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Upstash request failed: ${response.status} ${text}`);
+  }
+
+  const payload = (await response.json()) as UpstashResponse<T>;
+  if (payload.error) {
+    throw new Error(`Upstash command failed: ${payload.error}`);
+  }
+
+  return payload.result ?? null;
 };
 
 export const cacheGet = async (key: string): Promise<string | null> => {
-  try {
-    const client = await ensureRedis();
-    if (client) {
-      const value = await client.get(key);
-      return value ?? null;
-    }
-  } catch (err) {
-    console.error('Redis get failed, falling back to memory', err);
-  }
-  return memoryCache.get(key);
+  const result = await executeUpstash<string>(['GET', key]);
+  return result ?? null;
 };
 
 export const cacheSet = async (
@@ -57,14 +42,22 @@ export const cacheSet = async (
   value: string,
   ttlSeconds: number,
 ): Promise<void> => {
-  try {
-    const client = await ensureRedis();
-    if (client) {
-      await client.setEx(key, ttlSeconds, value);
-      return;
-    }
-  } catch (err) {
-    console.error('Redis set failed, falling back to memory', err);
-  }
-  memoryCache.set(key, value, ttlSeconds);
+  await executeUpstash<string>(['SETEX', key, ttlSeconds, value]);
 };
+
+export const cacheHealth = async (): Promise<{ backend: 'redis'; ok: boolean }> => {
+  try {
+    const pong = await executeUpstash<string>(['PING']);
+    return { backend: 'redis', ok: pong === 'PONG' };
+  } catch {
+    return { backend: 'redis', ok: false };
+  }
+};
+
+export const assertRedisConnection = async (): Promise<void> => {
+  const health = await cacheHealth();
+  if (!health.ok) {
+    throw new Error('Redis connection failed during startup');
+  }
+};
+

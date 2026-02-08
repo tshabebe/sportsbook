@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { placeBet, BetSlip } from '../services/bets';
-import { betSlipSchema } from '../validation/bets';
+import { betSlipSchema, settleBetSchema } from '../validation/bets';
+import type { ApiBetSlipInput } from '../validation/bets';
 import {
   createBetWithSelections,
   getBetWithSelections,
@@ -13,6 +13,9 @@ import { walletClient } from '../services/walletClient';
 import { config } from '../services/config';
 import { checkMaxPayout, checkOddsRange, checkStake } from '../services/risk';
 import { apiFootball } from '../services/apiFootball';
+import { asyncHandler } from '../middleware/asyncHandler';
+import { HttpError } from '../lib/http';
+import { requireBearerToken } from './utils';
 
 export const router = Router();
 
@@ -76,47 +79,6 @@ const oddsEqual = (a?: number, b?: number) => {
   return Math.abs(Number(a) - Number(b)) <= 0.001;
 };
 
-const extractOddMatch = (
-  response: unknown,
-  selection: {
-    betId?: number | string;
-    value: string;
-    odd: number;
-    bookmakerId?: number;
-    handicap?: string | number;
-  },
-): boolean => {
-  if (!Array.isArray(response)) return false;
-  const targetHandicap = normalizeHandicap(selection.handicap);
-  for (const item of response) {
-    const selections = extractSelectionsFromItem(item);
-    for (const s of selections) {
-      if (selection.bookmakerId && s.bookmakerId && Number(s.bookmakerId) !== Number(selection.bookmakerId)) {
-        continue;
-      }
-      if (selection.betId && s.betId && String(s.betId) !== String(selection.betId)) {
-        continue;
-      }
-      if (targetHandicap && normalizeHandicap(s.handicap) !== targetHandicap) {
-        continue;
-      }
-      if (
-        s.value.toLowerCase() === selection.value.toLowerCase() &&
-        oddsEqual(Number(s.odd), Number(selection.odd))
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-};
-
-const extractToken = (req: Request): string | null => {
-  const header = req.headers.authorization || '';
-  if (!header.startsWith('Bearer ')) return null;
-  return header.slice('Bearer '.length).trim();
-};
-
 const extractSelectionDetailsFromSnapshot = (
   snapshot: unknown,
   selection: {
@@ -158,14 +120,14 @@ const extractSelectionDetailsFromSnapshot = (
   return { found: false };
 };
 
-router.post('/betslip/validate', async (req: Request, res: Response) => {
-  try {
+router.post(
+  '/betslip/validate',
+  asyncHandler(async (req: Request, res: Response) => {
     const parsed = betSlipSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ ok: false, reason: 'Invalid betslip', errors: parsed.error.flatten() });
-      return;
+      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
     }
-    const slip = parsed.data as BetSlip;
+    const slip: ApiBetSlipInput = parsed.data;
 
     const stakeCheck = checkStake(slip.stake);
     if (!stakeCheck.ok) {
@@ -264,25 +226,18 @@ router.post('/betslip/validate', async (req: Request, res: Response) => {
     );
     const ok = results.every((r) => r.ok);
     res.json({ ok, results });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
+  }),
+);
 
-router.post('/betslip/place', async (req: Request, res: Response) => {
-  try {
-    const token = extractToken(req);
-    if (!token) {
-      res.status(401).json({ ok: false, reason: 'Missing Bearer token' });
-      return;
-    }
+router.post(
+  '/betslip/place',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = requireBearerToken(req);
     const parsed = betSlipSchema.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ ok: false, reason: 'Invalid betslip', errors: parsed.error.flatten() });
-      return;
+      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
     }
-    const slip = parsed.data as BetSlip;
+    const slip: ApiBetSlipInput = parsed.data;
     const stakeCheck = checkStake(slip.stake);
     if (!stakeCheck.ok) {
       res.status(409).json({ ok: false, error: stakeCheck });
@@ -411,85 +366,64 @@ router.post('/betslip/place', async (req: Request, res: Response) => {
       }
       throw dbErr;
     }
-    const bet = betId ? await getBetWithSelections(betId) : placeBet(slip, 'pending');
-    res.json({ ok: true, bet });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
-
-router.get('/bets', (_req: Request, res: Response) => {
-  listBetsWithSelections()
-    .then((bets) => res.json({ ok: true, bets }))
-    .catch((err) => {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      res.status(500).json({ ok: false, error: message });
-    });
-});
-
-router.get('/bets/:id', (req: Request, res: Response) => {
-  const betId = Number(req.params.id);
-  if (!Number.isFinite(betId)) {
-    res.status(400).json({ ok: false, error: 'Invalid bet id' });
-    return;
-  }
-  getBetWithSelections(betId)
-    .then((bet) => {
-      if (!bet) {
-        res.status(404).json({ ok: false, error: 'Bet not found' });
-        return;
-      }
-      res.json({ ok: true, bet });
-    })
-    .catch((err) => {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      res.status(500).json({ ok: false, error: message });
-    });
-});
-
-router.get('/bets/fixture/:fixtureId/pending', (req: Request, res: Response) => {
-  const fixtureId = Number(req.params.fixtureId);
-  if (!Number.isFinite(fixtureId)) {
-    res.status(400).json({ ok: false, error: 'Invalid fixture id' });
-    return;
-  }
-  listPendingBetsByFixture(fixtureId)
-    .then((bets) => res.json({ ok: true, bets }))
-    .catch((err) => {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      res.status(500).json({ ok: false, error: message });
-    });
-});
-
-router.post('/bets/:id/settle', async (req: Request, res: Response) => {
-  try {
-    const token = extractToken(req);
-    if (!token) {
-      res.status(401).json({ ok: false, error: 'Missing Bearer token' });
-      return;
-    }
-    const betId = Number(req.params.id);
-    if (!Number.isFinite(betId)) {
-      res.status(400).json({ ok: false, error: 'Invalid bet id' });
-      return;
-    }
-    const { result, payout } = req.body as {
-      result: 'won' | 'lost' | 'void';
-      payout?: number;
-    };
-    if (!result || !['won', 'lost', 'void'].includes(result)) {
-      res.status(400).json({ ok: false, error: 'Invalid result' });
-      return;
+    if (!betId) {
+      throw new HttpError(
+        503,
+        'DATABASE_UNAVAILABLE',
+        'Database is required to place and persist bets',
+      );
     }
     const bet = await getBetWithSelections(betId);
+    res.json({ ok: true, bet });
+  }),
+);
+
+router.get(
+  '/bets',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const bets = await listBetsWithSelections();
+    res.json({ ok: true, bets });
+  }),
+);
+
+router.get('/bets/:id', asyncHandler(async (req: Request, res: Response) => {
+  const betId = Number(req.params.id);
+  if (!Number.isFinite(betId)) {
+    throw new HttpError(400, 'INVALID_BET_ID', 'Invalid bet id');
+  }
+  const bet = await getBetWithSelections(betId);
+  if (!bet) {
+    throw new HttpError(404, 'BET_NOT_FOUND', 'Bet not found');
+  }
+  res.json({ ok: true, bet });
+}));
+
+router.get('/bets/fixture/:fixtureId/pending', asyncHandler(async (req: Request, res: Response) => {
+  const fixtureId = Number(req.params.fixtureId);
+  if (!Number.isFinite(fixtureId)) {
+    throw new HttpError(400, 'INVALID_FIXTURE_ID', 'Invalid fixture id');
+  }
+  const bets = await listPendingBetsByFixture(fixtureId);
+  res.json({ ok: true, bets });
+}));
+
+router.post('/bets/:id/settle', asyncHandler(async (req: Request, res: Response) => {
+    const token = requireBearerToken(req);
+    const betId = Number(req.params.id);
+    if (!Number.isFinite(betId)) {
+      throw new HttpError(400, 'INVALID_BET_ID', 'Invalid bet id');
+    }
+    const parsed = settleBetSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'INVALID_SETTLEMENT', 'Invalid settlement payload', parsed.error.flatten());
+    }
+    const { result, payout } = parsed.data;
+    const bet = await getBetWithSelections(betId);
     if (!bet) {
-      res.status(404).json({ ok: false, error: 'Bet not found' });
-      return;
+      throw new HttpError(404, 'BET_NOT_FOUND', 'Bet not found');
     }
     if (bet.status !== 'pending') {
-      res.status(409).json({ ok: false, error: 'Bet already settled' });
-      return;
+      throw new HttpError(409, 'ALREADY_SETTLED', 'Bet already settled');
     }
 
     let walletCreditTx: string | null = null;
@@ -513,8 +447,4 @@ router.post('/bets/:id/settle', async (req: Request, res: Response) => {
       walletCreditTx,
     });
     res.json({ ok: true, bet: updated });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
+}));

@@ -115,7 +115,7 @@ describe('api-football live integration', () => {
     const { createApp } = await import('../../src/app');
     const app = createApp();
 
-    const response = await request(app).get('/api/football/odds/bets');
+    const response = await request(app).get('/api/football/odds/live/bets');
     expect(response.status).toBe(200);
     expect(response.body).toHaveProperty('results');
   });
@@ -178,32 +178,14 @@ describe('api-football live integration', () => {
     });
 
   it
-    .runIf(shouldRun && Boolean(fixtureId))('hits markets for fixture', async () => {
+    .runIf(shouldRun && Boolean(fixtureId))('hits fixture odds for bet placement', async () => {
       const { createApp } = await import('../../src/app');
       const app = createApp();
 
-      const response = await request(app).get(`/api/markets/${fixtureId}`);
+      const response = await request(app).get(`/api/football/odds?fixture=${fixtureId}`);
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('results');
     });
-
-  it.runIf(shouldRun)('hits markets live', async () => {
-    const { createApp } = await import('../../src/app');
-    const app = createApp();
-
-    const response = await request(app).get('/api/markets/live');
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('results');
-  });
-
-  it.runIf(shouldRun)('hits markets list', async () => {
-    const { createApp } = await import('../../src/app');
-    const app = createApp();
-
-    const response = await request(app).get('/api/markets');
-    expect(response.status).toBe(200);
-    expect(response.body).toHaveProperty('results');
-  });
 
   it
     .runIf(shouldRun && Boolean(fixtureId))(
@@ -219,7 +201,8 @@ describe('api-football live integration', () => {
 
       const oddsItems = oddsResponse.body?.response ?? [];
       const firstItem = Array.isArray(oddsItems) ? oddsItems[0] : null;
-      const firstBet = firstItem?.bets?.[0];
+      const firstBookmaker = firstItem?.bookmakers?.[0];
+      const firstBet = firstBookmaker?.bets?.[0];
       const firstValue = firstBet?.values?.[0];
       if (!firstItem || !firstBet || !firstValue) {
         expect(Array.isArray(oddsItems)).toBe(true);
@@ -233,7 +216,7 @@ describe('api-football live integration', () => {
             betId: firstBet?.id ?? 1,
             value: String(firstValue?.value ?? 'Home'),
             odd: Number(firstValue?.odd ?? 1),
-            bookmakerId: firstItem?.bookmaker?.id,
+            bookmakerId: firstBookmaker?.id,
           },
         ],
         stake: 10,

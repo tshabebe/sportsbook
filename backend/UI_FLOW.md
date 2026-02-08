@@ -8,7 +8,7 @@ Purpose: show top leagues + quick access.
 Endpoints:
 
 - `GET /api/football/leagues/popular`
-- (optional) `GET /api/football/leagues/with-odds` to show only leagues with odds
+- (optional) `GET /api/football/leagues?search={query}` for broader league discovery
 
 ## 2) League Page (fixtures list)
 Purpose: show upcoming matches for a league.
@@ -33,7 +33,6 @@ Purpose: show full markets + context.
 
 Endpoints:
 
-- `GET /api/markets/{fixtureId}` (normalized markets for the UI)
 - `GET /api/football/fixtures?ids={fixtureId}`
 - `GET /api/football/standings?league={id}&season={season}`
 - `GET /api/football/fixtures/headtohead?h2h={team1Id}-{team2Id}`
@@ -57,7 +56,7 @@ Endpoints:
 - `GET /api/football/fixtures/statistics?fixture={fixtureId}`
 - `GET /api/football/fixtures/events?fixture={fixtureId}`
 - `GET /api/football/odds/live?fixture={fixtureId}`
-- `GET /api/markets/{fixtureId}` (optional, for live market cards)
+- `GET /api/football/odds?fixture={fixtureId}` (for non-live market cards)
 
 ## 7) Bet Slip (validate)
 Purpose: confirm odds are still valid.

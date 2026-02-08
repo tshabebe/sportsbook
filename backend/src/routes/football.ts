@@ -1,26 +1,23 @@
 import { Router, Request, Response } from 'express';
 import { apiFootball } from '../services/apiFootball';
 import { normalizeQuery } from './utils';
+import { asyncHandler } from '../middleware/asyncHandler';
 
 export const router = Router();
 
 // Generic Proxy Handler
-const handleProxy = (path: string) => async (req: Request, res: Response) => {
-  try {
+const handleProxy = (path: string) =>
+  asyncHandler(async (req: Request, res: Response) => {
     const params = normalizeQuery(req.query);
     const data = await apiFootball.proxy(path, params);
     res.json(data);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`Error proxying ${path}:`, message);
-    res.status(500).json({ error: message });
-  }
-};
+  });
 
 // --- Custom Optimized Routes ---
 
-router.get('/leagues/popular', async (_req: Request, res: Response) => {
-  try {
+router.get(
+  '/leagues/popular',
+  asyncHandler(async (_req: Request, res: Response) => {
     // Optimized: Use hardcoded IDs to avoid 12 parallel API search calls (Rate Limit protection)
     const leagues = [
       { id: 39, name: 'Premier League', country: 'England', logo: 'https://media.api-sports.io/football/leagues/39.png', type: 'League' },
@@ -37,11 +34,8 @@ router.get('/leagues/popular', async (_req: Request, res: Response) => {
       { id: 40, name: 'Championship', country: 'England', logo: 'https://media.api-sports.io/football/leagues/40.png', type: 'League' },
     ];
     res.json({ ok: true, leagues });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    res.status(500).json({ ok: false, error: message });
-  }
-});
+  }),
+);
 
 // --- Proxy Routes (Mapped 1:1 to API-Football) ---
 

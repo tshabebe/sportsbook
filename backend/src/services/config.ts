@@ -19,15 +19,34 @@ const sanitizeDatabaseUrl = (value: string | undefined): string => {
   }
 };
 
+const required = (value: string | undefined, key: string): string => {
+  if (!value || !value.trim()) {
+    throw new Error(`Missing required environment variable: ${key}`);
+  }
+  return value;
+};
+
 export const config = {
   port: toInt(process.env.PORT, 3001),
   apiFootballBaseUrl:
     process.env.API_FOOTBALL_BASE_URL ?? 'https://v3.football.api-sports.io',
-  apiFootballKey: process.env.API_FOOTBALL_KEY ?? '',
-  redisUrl: process.env.REDIS_URL ?? '',
-  postgresUrl: sanitizeDatabaseUrl(process.env.DATABASE_URL ?? ''),
-  walletUrl: process.env.WALLET_URL ?? '',
-  walletPassKey: process.env.PASS_KEY ?? process.env.WALLET_API_KEY ?? '',
+  apiFootballKey: required(process.env.API_FOOTBALL_KEY, 'API_FOOTBALL_KEY'),
+  upstashRedisRestUrl: required(
+    process.env.UPSTASH_REDIS_REST_URL,
+    'UPSTASH_REDIS_REST_URL',
+  ),
+  upstashRedisRestToken: required(
+    process.env.UPSTASH_REDIS_REST_TOKEN,
+    'UPSTASH_REDIS_REST_TOKEN',
+  ),
+  postgresUrl: sanitizeDatabaseUrl(
+    required(process.env.DATABASE_URL, 'DATABASE_URL'),
+  ),
+  walletUrl: required(process.env.WALLET_URL, 'WALLET_URL'),
+  walletPassKey: required(
+    process.env.PASS_KEY ?? process.env.WALLET_API_KEY,
+    'PASS_KEY',
+  ),
   walletGameName: process.env.WALLET_GAME_NAME ?? 'Sportsbook',
   cacheTtlSeconds: {
     default: toInt(process.env.CACHE_TTL_DEFAULT, 60),
