@@ -48,36 +48,36 @@ export function RetailLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0f131a] px-4">
+    <div className="flex min-h-screen items-center justify-center bg-app-bg px-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md rounded-xl border border-[#2a3345] bg-[#121824] p-6"
+        className="w-full max-w-md rounded-xl border border-border-subtle bg-element-bg p-6"
       >
-        <h1 className="mb-1 text-xl font-semibold text-white">Retail POS Login</h1>
-        <p className="mb-6 text-sm text-[#9aa7bd]">Cashier access only</p>
+        <h1 className="mb-1 text-xl font-semibold text-text-contrast">Retail POS Login</h1>
+        <p className="mb-6 text-sm text-text-muted">Cashier access only</p>
 
         <TextField className="mb-4">
-          <Label className="mb-2 block text-xs font-medium text-[#c7d2e4]">Username</Label>
+          <Label className="mb-2 block text-xs font-medium text-text-muted">Username</Label>
           <Input
             {...register('username')}
-            className="w-full rounded border border-[#334055] bg-[#0f131a] px-3 py-2 text-sm text-white outline-none focus:border-[#4b84ff]"
+            className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
           />
         </TextField>
-        {errors.username ? <p className="mb-3 text-xs text-[#ff7b7b]">{errors.username.message}</p> : null}
+        {errors.username ? <p className="mb-3 text-xs text-red-500">{errors.username.message}</p> : null}
 
         <TextField className="mb-4">
-          <Label className="mb-2 block text-xs font-medium text-[#c7d2e4]">Password</Label>
+          <Label className="mb-2 block text-xs font-medium text-text-muted">Password</Label>
           <Input
             type="password"
             {...register('password')}
-            className="w-full rounded border border-[#334055] bg-[#0f131a] px-3 py-2 text-sm text-white outline-none focus:border-[#4b84ff]"
+            className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
           />
         </TextField>
-        {errors.password ? <p className="mb-3 text-xs text-[#ff7b7b]">{errors.password.message}</p> : null}
+        {errors.password ? <p className="mb-3 text-xs text-red-500">{errors.password.message}</p> : null}
 
-        {error ? <p className="mb-4 text-sm text-[#ff7b7b]">{error}</p> : null}
+        {error ? <p className="mb-4 text-sm text-red-500">{error}</p> : null}
 
-        <Button type="submit" isDisabled={loading} className="w-full bg-[#2f6fed] text-white hover:bg-[#2f6fed]/90">
+        <Button type="submit" isDisabled={loading} className="w-full">
           {loading ? 'Signing in...' : 'Sign In'}
         </Button>
       </form>

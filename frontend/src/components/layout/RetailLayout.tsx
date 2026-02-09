@@ -13,23 +13,23 @@ export function RetailLayout() {
   const linkClass = (path: string) =>
     `px-3 py-2 rounded text-sm font-medium ${
       location.pathname === path
-        ? 'bg-[#1f3b2c] text-[#9be8b3]'
-        : 'text-[#d2d7e0] hover:bg-[#1d2230]'
+        ? 'bg-accent-solid text-accent-text-contrast'
+        : 'text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
     }`;
 
   return (
-    <div className="min-h-screen bg-[#0f131a] text-[#f1f5f9]">
-      <header className="border-b border-[#263041] bg-[#121824]">
+    <div className="min-h-screen bg-app-bg text-text-contrast">
+      <header className="border-b border-border-subtle bg-element-bg">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">Retail POS</h1>
-            <span className="rounded bg-[#1f3b2c] px-2 py-1 text-xs font-semibold text-[#9be8b3]">
+            <span className="rounded bg-element-hover-bg px-2 py-1 text-xs font-semibold text-text-muted">
               RETAIL MODE
             </span>
           </div>
           <button
             onClick={handleLogout}
-            className="rounded border border-[#3b475d] px-3 py-1.5 text-xs font-medium text-[#d2d7e0] hover:bg-[#1d2230]"
+            className="rounded border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-muted hover:bg-element-hover-bg hover:text-text-contrast"
           >
             Logout
           </button>
@@ -50,4 +50,3 @@ export function RetailLayout() {
     </div>
   );
 }
-
