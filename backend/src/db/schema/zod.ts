@@ -9,4 +9,18 @@ export {
   betSelectionsSelectSchema,
   betSelectionsUpdateSchema,
 } from './betSelections';
-
+export {
+  retailersInsertSchema,
+  retailersSelectSchema,
+  retailersUpdateSchema,
+} from './retailers';
+export {
+  retailTicketsInsertSchema,
+  retailTicketsSelectSchema,
+  retailTicketsUpdateSchema,
+} from './retailTickets';
+export {
+  retailTicketEventsInsertSchema,
+  retailTicketEventsSelectSchema,
+  retailTicketEventsUpdateSchema,
+} from './retailTicketEvents';

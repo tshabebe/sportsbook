@@ -36,6 +36,13 @@
       "when": 1770625059329,
       "tag": "0004_spicy_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770652875351,
+      "tag": "0005_shiny_exiles",
+      "breakpoints": true
     }
   ]
 }

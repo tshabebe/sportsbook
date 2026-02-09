@@ -3,10 +3,12 @@ import { betSlipSchema, settleBetSchema } from '../validation/bets';
 import type { ApiBetSlipInput } from '../validation/bets';
 import {
   createBetWithSelections,
+  createRetailTicketForBet,
   getBetWithSelections,
   getExposureForOutcome,
   listBetsWithSelections,
   listPendingBetsByFixture,
+  settleRetailTicketByBet,
   updateBetSettlement,
 } from '../services/db';
 import { walletClient } from '../services/walletClient';
@@ -18,6 +20,15 @@ import { HttpError } from '../lib/http';
 import { requireBearerToken } from './utils';
 
 export const router = Router();
+
+const generateRetailTicketId = (): string => {
+  const segment = (length: number) =>
+    Math.random()
+      .toString(36)
+      .slice(2, 2 + length)
+      .toUpperCase();
+  return `TK-${segment(4)}-${segment(4)}-${Date.now().toString(36).toUpperCase()}`;
+};
 
 const extractSelectionsFromItem = (item: any) => {
   const selections: Array<{
@@ -378,6 +389,113 @@ router.post(
   }),
 );
 
+router.post(
+  '/betslip/place-retail',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = betSlipSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
+    }
+    const slip: ApiBetSlipInput = parsed.data;
+    const stakeCheck = checkStake(slip.stake);
+    if (!stakeCheck.ok) {
+      res.status(409).json({ ok: false, error: stakeCheck });
+      return;
+    }
+    const oddsCheck = checkOddsRange(slip.selections);
+    if (!oddsCheck.ok) {
+      res.status(409).json({ ok: false, error: oddsCheck });
+      return;
+    }
+    const payoutCheck = checkMaxPayout(slip.stake, slip.selections);
+    if (!payoutCheck.ok) {
+      res.status(409).json({ ok: false, error: payoutCheck });
+      return;
+    }
+
+    const validation = await Promise.all(
+      slip.selections.map(async (selection) => {
+        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
+        if (!oddsData || !oddsData.response || !oddsData.response.length) {
+          return {
+            selection,
+            ok: false,
+            error: { code: 'ODDS_UNAVAILABLE', message: 'Odds currently unavailable for this fixture' },
+          };
+        }
+        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
+        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT']);
+        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
+          return {
+            selection,
+            ok: false,
+            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
+          };
+        }
+
+        const detail = extractSelectionDetailsFromSnapshot(
+          oddsData,
+          selection,
+          selection.fixtureId,
+        );
+        if (!detail.found) {
+          return {
+            selection,
+            ok: false,
+            error: { code: 'ODDS_CHANGED', message: 'Odds changed since selection' },
+          };
+        }
+        if (detail.suspended) {
+          return {
+            selection,
+            ok: false,
+            error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
+          };
+        }
+        return { selection, ok: true };
+      }),
+    );
+    const ok = validation.every((r) => r.ok);
+    if (!ok) {
+      res.status(409).json({
+        ok: false,
+        reason: 'Odds changed or unavailable',
+        validation,
+      });
+      return;
+    }
+
+    const ticketId = generateRetailTicketId();
+    const betRef = `retail_${ticketId}`;
+    const betId = await createBetWithSelections(
+      betRef,
+      slip,
+      {},
+      'pending',
+      undefined,
+      { channel: 'online_retail_ticket', ticketId },
+    );
+    if (!betId) {
+      throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
+    }
+
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
+    const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
+    const bet = await getBetWithSelections(betId);
+
+    res.json({
+      ok: true,
+      ticket: {
+        ticketId: ticket.ticketId,
+        status: ticket.status,
+        expiresAt: ticket.expiresAt,
+      },
+      bet,
+    });
+  }),
+);
+
 router.get(
   '/bets',
   asyncHandler(async (_req: Request, res: Response) => {
@@ -445,6 +563,11 @@ router.post('/bets/:id/settle', asyncHandler(async (req: Request, res: Response)
       result,
       payout: creditAmount || null,
       walletCreditTx,
+    });
+    await settleRetailTicketByBet({
+      betId,
+      result,
+      payout: creditAmount || null,
     });
     res.json({ ok: true, bet: updated });
 }));

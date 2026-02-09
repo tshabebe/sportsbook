@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import { HttpError } from '../lib/http';
+import { verifyRetailToken } from '../services/retailAuth';
 
 export const normalizeQuery = (
   query: Request['query'],
@@ -28,4 +29,11 @@ export const requireBearerToken = (req: Request): string => {
     throw new HttpError(401, 'UNAUTHORIZED', 'Missing Bearer token');
   }
   return token;
+};
+
+export const requireRetailerToken = (
+  req: Request,
+): { retailerId: number; username: string; exp: number } => {
+  const token = requireBearerToken(req);
+  return verifyRetailToken(token);
 };

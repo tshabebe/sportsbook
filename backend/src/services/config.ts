@@ -47,6 +47,10 @@ export const config = {
     process.env.PASS_KEY ?? process.env.WALLET_API_KEY,
     'PASS_KEY',
   ),
+  retailAuthSecret: required(
+    process.env.RETAIL_AUTH_SECRET ?? process.env.JWT_SECRET,
+    'RETAIL_AUTH_SECRET',
+  ),
   walletGameName: process.env.WALLET_GAME_NAME ?? 'Sportsbook',
   cacheTtlSeconds: {
     default: toInt(process.env.CACHE_TTL_DEFAULT, 60),

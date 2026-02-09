@@ -3,6 +3,7 @@ import cors from 'cors';
 import { router as footballRouter } from './routes/football';
 import { router as betsRouter } from './routes/bets';
 import { router as walletRouter } from './routes/wallet';
+import { router as retailRouter } from './routes/retail';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { cacheHealth } from './services/cache';
@@ -54,6 +55,7 @@ export const createApp = (): Express => {
   app.use('/api/football', footballRouter);
   app.use('/api', betsRouter);
   app.use('/api/wallet', walletRouter);
+  app.use('/api/retail', retailRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

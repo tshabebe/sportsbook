@@ -10,6 +10,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
 
+export const betChannelEnum = ['online_wallet', 'online_retail_ticket'] as const;
+
 export const bets = pgTable(
   'bets',
   {
@@ -17,6 +19,8 @@ export const bets = pgTable(
     betRef: text('bet_ref').notNull(),
     userId: bigint('user_id', { mode: 'number' }),
     username: text('username'),
+    channel: text('channel', { enum: betChannelEnum }).default('online_wallet').notNull(),
+    ticketId: text('ticket_id'),
     stake: numeric('stake', { precision: 12, scale: 2 }).notNull(),
     status: text('status').notNull(),
     walletDebitTx: text('wallet_debit_tx'),
@@ -28,6 +32,7 @@ export const bets = pgTable(
   },
   (table) => ({
     betRefIdx: uniqueIndex('bets_bet_ref_idx').on(table.betRef),
+    ticketIdIdx: uniqueIndex('bets_ticket_id_idx').on(table.ticketId),
     statusIdx: index('bets_status_idx').on(table.status),
     userIdIdx: index('bets_user_id_idx').on(table.userId),
   }),

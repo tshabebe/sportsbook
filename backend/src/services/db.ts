@@ -3,13 +3,23 @@ import { db } from '../db';
 import {
   bets,
   betSelections,
+  retailers,
+  retailTickets,
+  retailTicketEvents,
   betsSelectSchema,
   betsInsertSchema,
+  retailersSelectSchema,
+  retailTicketsSelectSchema,
+  retailTicketsInsertSchema,
+  retailTicketEventsInsertSchema,
+  retailTicketsUpdateSchema,
   dbBetSettlementUpdateSchema,
   betSelectionsSelectSchema,
   betSelectionsInsertSchema,
   type DbBetSelect,
   type DbBetSelectionSelect,
+  type DbRetailerSelect,
+  type DbRetailTicketSelect,
 } from '../db/schema';
 import type { ApiBetSlipInput } from '../validation/bets';
 
@@ -19,11 +29,14 @@ export const createBetWithSelections = async (
   user: { id?: number; username?: string },
   status: string,
   walletDebitTx?: string,
+  options?: { channel?: 'online_wallet' | 'online_retail_ticket'; ticketId?: string | null },
 ): Promise<number | null> => {
   const betRow = betsInsertSchema.parse({
     betRef,
     userId: user.id ?? null,
     username: user.username ?? null,
+    channel: options?.channel ?? 'online_wallet',
+    ticketId: options?.ticketId ?? null,
     stake: slip.stake.toFixed(2),
     status,
     walletDebitTx: walletDebitTx ?? null,
@@ -47,6 +60,7 @@ export const createBetWithSelections = async (
 };
 
 type DbBetWithSelections = DbBetSelect & { selections: DbBetSelectionSelect[] };
+type DbRetailTicketWithBet = DbRetailTicketSelect & { bet: DbBetWithSelections };
 
 export const listBetsWithSelections = async () => {
   const betRows = await db.select().from(bets).orderBy(desc(bets.id));
@@ -149,4 +163,263 @@ export const getExposureForOutcome = async (
 
   const exposure = Number(row?.exposure ?? 0);
   return Number.isNaN(exposure) ? 0 : exposure;
+};
+
+const appendRetailTicketEvent = async (input: {
+  ticketId: string;
+  eventType:
+    | 'created'
+    | 'claimed'
+    | 'settled_won'
+    | 'settled_lost'
+    | 'paid'
+    | 'voided'
+    | 'expired';
+  actorType: 'system' | 'retailer';
+  actorId?: string | null;
+  payloadJson?: unknown;
+}) => {
+  const eventRow = retailTicketEventsInsertSchema.parse({
+    ticketId: input.ticketId,
+    eventType: input.eventType,
+    actorType: input.actorType,
+    actorId: input.actorId ?? null,
+    payloadJson: input.payloadJson ?? null,
+  });
+  await db.insert(retailTicketEvents).values(eventRow);
+};
+
+export const findRetailerByUsername = async (
+  username: string,
+): Promise<DbRetailerSelect | null> => {
+  const [row] = await db
+    .select()
+    .from(retailers)
+    .where(eq(retailers.username, username))
+    .limit(1);
+  if (!row) return null;
+  return retailersSelectSchema.parse(row);
+};
+
+export const createRetailTicketForBet = async (input: {
+  ticketId: string;
+  betId: number;
+  expiresAt?: Date | null;
+}) => {
+  const ticketRow = retailTicketsInsertSchema.parse({
+    ticketId: input.ticketId,
+    betId: input.betId,
+    status: 'open',
+    expiresAt: input.expiresAt ?? null,
+  });
+  const [inserted] = await db.insert(retailTickets).values(ticketRow).returning();
+  const parsed = retailTicketsSelectSchema.parse(inserted);
+  await appendRetailTicketEvent({
+    ticketId: parsed.ticketId,
+    eventType: 'created',
+    actorType: 'system',
+    payloadJson: { betId: parsed.betId },
+  });
+  return parsed;
+};
+
+export const getRetailTicketByTicketId = async (
+  ticketId: string,
+): Promise<DbRetailTicketWithBet | null> => {
+  const [ticket] = await db
+    .select()
+    .from(retailTickets)
+    .where(eq(retailTickets.ticketId, ticketId))
+    .limit(1);
+
+  if (!ticket) return null;
+  const parsedTicket = retailTicketsSelectSchema.parse(ticket);
+  const bet = await getBetWithSelections(parsedTicket.betId);
+  if (!bet) return null;
+  return { ...parsedTicket, bet };
+};
+
+export const claimRetailTicket = async (ticketId: string, retailerId: number) => {
+  const [updated] = await db
+    .update(retailTickets)
+    .set(
+      retailTicketsUpdateSchema.parse({
+        status: 'claimed',
+        claimedByRetailerId: retailerId,
+        claimedAt: new Date(),
+      }),
+    )
+    .where(
+      and(
+        eq(retailTickets.ticketId, ticketId),
+        eq(retailTickets.status, 'open'),
+        sql`${retailTickets.claimedByRetailerId} is null`,
+      ),
+    )
+    .returning();
+
+  if (!updated) return null;
+  const parsed = retailTicketsSelectSchema.parse(updated);
+  await appendRetailTicketEvent({
+    ticketId: parsed.ticketId,
+    eventType: 'claimed',
+    actorType: 'retailer',
+    actorId: String(retailerId),
+  });
+  return parsed;
+};
+
+export const listRetailTicketsByRetailer = async (
+  retailerId: number,
+  status?:
+    | 'open'
+    | 'claimed'
+    | 'settled_lost'
+    | 'settled_won_unpaid'
+    | 'paid'
+    | 'void'
+    | 'expired',
+) => {
+  const rows = await db
+    .select()
+    .from(retailTickets)
+    .where(
+      and(
+        eq(retailTickets.claimedByRetailerId, retailerId),
+        status ? eq(retailTickets.status, status) : sql`true`,
+      ),
+    )
+    .orderBy(desc(retailTickets.id));
+  return rows.map((row) => retailTicketsSelectSchema.parse(row));
+};
+
+export const payoutRetailTicket = async (input: {
+  ticketId: string;
+  retailerId: number;
+  payoutReference: string;
+}) => {
+  const existing = await getRetailTicketByTicketId(input.ticketId);
+  if (!existing) return { code: 'NOT_FOUND' as const };
+  if (existing.status === 'paid') {
+    return { code: 'ALREADY_PAID' as const, ticket: existing };
+  }
+  if (existing.status !== 'settled_won_unpaid') {
+    return { code: 'NOT_SETTLED_FOR_PAYOUT' as const };
+  }
+  if (existing.claimedByRetailerId !== input.retailerId) {
+    return { code: 'NOT_OWNER' as const };
+  }
+
+  const [updated] = await db
+    .update(retailTickets)
+    .set(
+      retailTicketsUpdateSchema.parse({
+        status: 'paid',
+        payoutReference: input.payoutReference,
+        paidByRetailerId: input.retailerId,
+        paidAt: new Date(),
+      }),
+    )
+    .where(
+      and(
+        eq(retailTickets.ticketId, input.ticketId),
+        eq(retailTickets.status, 'settled_won_unpaid'),
+        eq(retailTickets.claimedByRetailerId, input.retailerId),
+      ),
+    )
+    .returning();
+
+  if (!updated) {
+    return { code: 'CONFLICT' as const };
+  }
+
+  const parsed = retailTicketsSelectSchema.parse(updated);
+  await appendRetailTicketEvent({
+    ticketId: parsed.ticketId,
+    eventType: 'paid',
+    actorType: 'retailer',
+    actorId: String(input.retailerId),
+    payloadJson: { payoutReference: input.payoutReference },
+  });
+  return { code: 'OK' as const, ticket: parsed };
+};
+
+export const settleRetailTicketByBet = async (input: {
+  betId: number;
+  result: 'won' | 'lost' | 'void';
+  payout?: number | null;
+}) => {
+  const [ticketRow] = await db
+    .select()
+    .from(retailTickets)
+    .where(eq(retailTickets.betId, input.betId))
+    .limit(1);
+  if (!ticketRow) return null;
+
+  const ticket = retailTicketsSelectSchema.parse(ticketRow);
+  if (input.result === 'won') {
+    const [updated] = await db
+      .update(retailTickets)
+      .set(
+        retailTicketsUpdateSchema.parse({
+          status: 'settled_won_unpaid',
+          payoutAmount:
+            input.payout !== undefined && input.payout !== null
+              ? input.payout.toFixed(2)
+              : null,
+        }),
+      )
+      .where(eq(retailTickets.ticketId, ticket.ticketId))
+      .returning();
+    if (updated) {
+      await appendRetailTicketEvent({
+        ticketId: ticket.ticketId,
+        eventType: 'settled_won',
+        actorType: 'system',
+      });
+      return retailTicketsSelectSchema.parse(updated);
+    }
+  }
+
+  if (input.result === 'lost') {
+    const [updated] = await db
+      .update(retailTickets)
+      .set(
+        retailTicketsUpdateSchema.parse({
+          status: 'settled_lost',
+        }),
+      )
+      .where(eq(retailTickets.ticketId, ticket.ticketId))
+      .returning();
+    if (updated) {
+      await appendRetailTicketEvent({
+        ticketId: ticket.ticketId,
+        eventType: 'settled_lost',
+        actorType: 'system',
+      });
+      return retailTicketsSelectSchema.parse(updated);
+    }
+  }
+
+  if (input.result === 'void') {
+    const [updated] = await db
+      .update(retailTickets)
+      .set(
+        retailTicketsUpdateSchema.parse({
+          status: 'void',
+        }),
+      )
+      .where(eq(retailTickets.ticketId, ticket.ticketId))
+      .returning();
+    if (updated) {
+      await appendRetailTicketEvent({
+        ticketId: ticket.ticketId,
+        eventType: 'voided',
+        actorType: 'system',
+      });
+      return retailTicketsSelectSchema.parse(updated);
+    }
+  }
+
+  return ticket;
 };
