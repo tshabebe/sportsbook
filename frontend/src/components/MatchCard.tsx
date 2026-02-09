@@ -1,13 +1,13 @@
 import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
-import { useBetStore } from "../store/betStore";
+import { useBetSlip } from "../context/BetSlipContext";
 
 interface MatchCardProps {
     fixture: any;
 }
 
 export function MatchCard({ fixture }: MatchCardProps) {
-    const { addBet } = useBetStore();
+    const { addToBetSlip, bets } = useBetSlip();
     const { fixture: info, teams, goals, odds } = fixture || {};
     const validOdds = odds || { home: "-", draw: "-", away: "-" };
 
@@ -16,16 +16,34 @@ export function MatchCard({ fixture }: MatchCardProps) {
     const isLive = info.status?.short === "1H" || info.status?.short === "2H" || info.status?.short === "HT";
     const timeDisplay = isLive ? `${info.status?.elapsed}'` : new Date(info.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const scoreDisplay = isLive ? `${goals.home ?? 0}-${goals.away ?? 0}` : "";
+    const fixtureName = `${teams.home.name} vs ${teams.away.name}`;
 
     const handleBet = (selection: "Home" | "Draw" | "Away", oddValue: string) => {
-        addBet({
-            id: `${info.id}-${selection}`,
-            team1: teams.home.name,
-            team2: teams.away.name,
-            selection: selection === "Home" ? teams.home.name : selection === "Draw" ? "Draw" : teams.away.name,
-            odds: parseFloat(oddValue),
-            stake: 0
+        const selectionId = `${info.id}-1-${selection}`; // 1 = Match Winner market
+
+        // Check if already selected
+        if (bets.some(b => b.id === selectionId)) {
+            return; // Already in bet slip
+        }
+
+        addToBetSlip({
+            id: selectionId,
+            fixtureId: info.id,
+            betId: 1, // Match Winner
+            value: selection,
+            odd: parseFloat(oddValue),
+            bookmakerId: 8, // Bet365
+            fixtureName: fixtureName,
+            marketName: "Match Winner",
+            selectionName: selection === "Home" ? teams.home.name : selection === "Draw" ? "Draw" : teams.away.name,
+            odds: parseFloat(oddValue)
         });
+    };
+
+    // Check if a selection is active
+    const isSelected = (selection: "Home" | "Draw" | "Away") => {
+        const selectionId = `${info.id}-1-${selection}`;
+        return bets.some(b => b.id === selectionId);
     };
 
     return (
@@ -43,9 +61,9 @@ export function MatchCard({ fixture }: MatchCardProps) {
                     {isLive && <span className="text-[#ffd60a]">{info.status?.short} {scoreDisplay}</span>}
                 </div>
                 {/* Mobile Add Button (Top Right) */}
-                <button className="text-[#E1E1E1] hover:opacity-70">
+                <Link to={`/event/${info.id}`} className="text-[#E1E1E1] hover:opacity-70">
                     <Plus size={18} />
-                </button>
+                </Link>
             </div>
 
             {/* Main Content Container (Desktop: Flex Row, Mobile: Flex Col) */}
@@ -85,27 +103,53 @@ export function MatchCard({ fixture }: MatchCardProps) {
 
             {/* Odds Buttons */}
             <div className="flex gap-2 w-full md:w-auto mt-1 md:mt-0">
-                <OutcomeButton label={teams.home.name} odds={validOdds.home} onClick={() => handleBet("Home", validOdds.home)} />
-                <OutcomeButton label="Draw" odds={validOdds.draw} onClick={() => handleBet("Draw", validOdds.draw)} />
-                <OutcomeButton label={teams.away.name} odds={validOdds.away} onClick={() => handleBet("Away", validOdds.away)} />
+                <OutcomeButton
+                    label={teams.home.name}
+                    odds={validOdds.home}
+                    isSelected={isSelected("Home")}
+                    onClick={() => handleBet("Home", validOdds.home)}
+                />
+                <OutcomeButton
+                    label="Draw"
+                    odds={validOdds.draw}
+                    isSelected={isSelected("Draw")}
+                    onClick={() => handleBet("Draw", validOdds.draw)}
+                />
+                <OutcomeButton
+                    label={teams.away.name}
+                    odds={validOdds.away}
+                    isSelected={isSelected("Away")}
+                    onClick={() => handleBet("Away", validOdds.away)}
+                />
             </div>
 
             {/* Desktop Add Button */}
-            <button className="hidden md:block text-[#E1E1E1] hover:opacity-70 ml-2">
+            <Link to={`/event/${info.id}`} className="hidden md:block text-[#E1E1E1] hover:opacity-70 ml-2">
                 <Plus size={20} />
-            </button>
+            </Link>
         </div>
     );
 }
 
-function OutcomeButton({ label, odds, onClick }: { label: string, odds: string, onClick: () => void }) {
+function OutcomeButton({ label, odds, isSelected, onClick }: { label: string, odds: string, isSelected: boolean, onClick: () => void }) {
     return (
         <button
-            onClick={onClick}
-            className="flex-1 md:w-[100px] bg-[#0f0f0f] border border-transparent hover:border-[#333] rounded-lg p-2 flex flex-col md:flex-row justify-between items-center transition-all cursor-pointer group/btn"
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onClick();
+            }}
+            className={`flex-1 md:w-[100px] rounded-lg p-2 flex flex-col md:flex-row justify-between items-center transition-all cursor-pointer group/btn border ${isSelected
+                    ? 'bg-[#ffd60a] border-[#ffd60a] text-[#1d1d1d]'
+                    : 'bg-[#0f0f0f] border-transparent hover:border-[#333]'
+                }`}
         >
-            <span className="text-[#c8c8c8] text-[11px] font-medium line-clamp-1 text-left w-full md:w-auto group-hover/btn:text-white">{label}</span>
-            <span className="text-[#ffd60a] text-[13px] font-semibold">{odds}</span>
+            <span className={`text-[11px] font-medium line-clamp-1 text-left w-full md:w-auto ${isSelected ? 'text-[#1d1d1d]' : 'text-[#c8c8c8] group-hover/btn:text-white'}`}>
+                {label}
+            </span>
+            <span className={`text-[13px] font-semibold ${isSelected ? 'text-[#1d1d1d]' : 'text-[#ffd60a]'}`}>
+                {odds}
+            </span>
         </button>
     );
 }

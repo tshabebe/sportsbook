@@ -29,6 +29,13 @@
       "when": 1770149993063,
       "tag": "0003_solid_sugar_man",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770625059329,
+      "tag": "0004_spicy_karnak",
+      "breakpoints": true
     }
   ]
 }

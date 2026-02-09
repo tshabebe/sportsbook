@@ -14,6 +14,28 @@ interface MarketAccordionProps {
     children: React.ReactNode;
 }
 
+interface FixtureDetails {
+    fixture: { id: number; date: string };
+    league: { name: string; logo: string };
+    teams: {
+        home: { name: string; logo: string };
+        away: { name: string; logo: string };
+    };
+}
+
+interface OddsData {
+    fixture: { id: number; date: string };
+    league: { name: string };
+    bookmakers: Array<{
+        id: number;
+        bets: Array<{
+            id: number;
+            name: string;
+            values: Array<{ value: string; odd: string; handicap?: string }>;
+        }>;
+    }>;
+}
+
 // --- Components ---
 
 function MarketAccordion({ title, isOpen, onToggle, children }: MarketAccordionProps) {
@@ -56,16 +78,26 @@ export function FixtureMarketsPage() {
     const { addToBetSlip, bets } = useBetSlip();
     const [openMarkets, setOpenMarkets] = useState<Record<string, boolean>>({ 'Match Winner': true, 'Goals Over/Under': true });
 
-    // Fetch fixture details + odds
-    // We need a hook/endpoint that gets ALL odds for a fixture. 
-    // Using direct API call for now since we haven't created a specific hook for "all markets".
-    const { data: fixtureData, isLoading } = useQuery({
-        queryKey: ['fixture', fixtureId],
+    // Fetch fixture details (team names, logos)
+    const { data: fixtureDetails, isLoading: isLoadingFixture } = useQuery({
+        queryKey: ['fixture-details', fixtureId],
+        queryFn: async () => {
+            const { data } = await api.get('/football/fixtures', {
+                params: { id: fixtureId }
+            });
+            return data.response?.[0] as FixtureDetails | undefined;
+        },
+        enabled: !!fixtureId
+    });
+
+    // Fetch odds for all markets
+    const { data: oddsData, isLoading: isLoadingOdds } = useQuery({
+        queryKey: ['fixture-odds', fixtureId],
         queryFn: async () => {
             const { data } = await api.get('/football/odds', {
                 params: { fixture: fixtureId, bookmaker: 8 } // Bet365
             });
-            return data.response?.[0];
+            return data.response?.[0] as OddsData | undefined;
         },
         enabled: !!fixtureId
     });
@@ -74,16 +106,22 @@ export function FixtureMarketsPage() {
         setOpenMarkets(prev => ({ ...prev, [marketName]: !prev[marketName] }));
     };
 
-    if (isLoading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd60a]"></div></div>;
-    if (!fixtureData) return <div className="text-center py-20 text-[#c8c8c8]">Fixture not found.</div>;
+    const isLoading = isLoadingFixture || isLoadingOdds;
 
-    const fixture = fixtureData.fixture;
-    const league = fixtureData.league;
-    const markets = fixtureData.bookmakers?.[0]?.bets || [];
+    if (isLoading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ffd60a]"></div></div>;
+    if (!fixtureDetails) return <div className="text-center py-20 text-[#c8c8c8]">Fixture not found.</div>;
+
+    const fixture = fixtureDetails.fixture;
+    const league = fixtureDetails.league;
+    const teams = fixtureDetails.teams;
+    const markets = oddsData?.bookmakers?.[0]?.bets || [];
+    const bookmakerId = oddsData?.bookmakers?.[0]?.id;
 
     // Helper to check selection
-    // Note: This needs robust selection checking logic matching BetSlip context
     const isSelected = (selectionId: string) => bets.some(b => b.id === selectionId);
+
+    // Generate fixture name for bet slip
+    const fixtureName = `${teams.home.name} vs ${teams.away.name}`;
 
     return (
         <div className="w-full max-w-[800px] mx-auto pb-20">
@@ -102,58 +140,69 @@ export function FixtureMarketsPage() {
             {/* Teams Scoreboard */}
             <div className="bg-[#1d1d1d] p-6 mb-6">
                 <div className="flex justify-between items-center max-w-[400px] mx-auto">
-                    <div className="text-center w-1/3">
-                        {/* Placeholder logos if not available in odds response */}
-                        <div className="font-bold text-white text-lg mb-1">{/* Home Name - need fixture details call */} Home</div>
+                    <div className="text-center w-1/3 flex flex-col items-center gap-2">
+                        <img
+                            src={teams.home.logo}
+                            alt={teams.home.name}
+                            className="w-12 h-12 object-contain"
+                        />
+                        <div className="font-bold text-white text-sm">{teams.home.name}</div>
                     </div>
                     <div className="text-[#ffd60a] font-mono text-2xl font-bold">VS</div>
-                    <div className="text-center w-1/3">
-                        <div className="font-bold text-white text-lg mb-1">{/* Away Name */} Away</div>
+                    <div className="text-center w-1/3 flex flex-col items-center gap-2">
+                        <img
+                            src={teams.away.logo}
+                            alt={teams.away.name}
+                            className="w-12 h-12 object-contain"
+                        />
+                        <div className="font-bold text-white text-sm">{teams.away.name}</div>
                     </div>
                 </div>
-                {/* Note: The odds endpoint DOES NOT return team names/logos. 
-                    We need to fetch fixture details separately or pass them via state. 
-                    For now, I'll update the hook to fetch fixtures+odds or handle missing names.
-                */}
             </div>
 
             {/* Markets List */}
             <div className="px-4">
-                {markets.map((market: any) => (
-                    <MarketAccordion
-                        key={market.id}
-                        title={market.name}
-                        isOpen={openMarkets[market.name]}
-                        onToggle={() => toggleMarket(market.name)}
-                    >
-                        {market.values.map((outcome: any) => {
-                            const selectionId = `${fixture.id}-${market.id}-${outcome.value}`;
-                            return (
-                                <OutcomeButton
-                                    key={outcome.value}
-                                    label={outcome.value}
-                                    odd={outcome.odd}
-                                    isSelected={isSelected(selectionId)}
-                                    onClick={() => {
-                                        addToBetSlip({
-                                            id: selectionId,
-                                            fixtureId: fixture.id,
-                                            betId: market.id,
-                                            value: outcome.value,
-                                            odd: Number(outcome.odd),
-                                            handicap: outcome.handicap,
-                                            bookmakerId: fixtureData.bookmakers?.[0]?.id,
-                                            fixtureName: "Fixture Name Placeholder",
-                                            marketName: market.name,
-                                            selectionName: outcome.value,
-                                            odds: Number(outcome.odd)
-                                        });
-                                    }}
-                                />
-                            )
-                        })}
-                    </MarketAccordion>
-                ))}
+                {markets.length === 0 ? (
+                    <div className="text-center py-10 text-[#888]">
+                        No markets available for this fixture.
+                    </div>
+                ) : (
+                    markets.map((market) => (
+                        <MarketAccordion
+                            key={market.id}
+                            title={market.name}
+                            isOpen={openMarkets[market.name] ?? false}
+                            onToggle={() => toggleMarket(market.name)}
+                        >
+                            {market.values.map((outcome) => {
+                                const selectionId = `${fixture.id}-${market.id}-${outcome.value}`;
+                                return (
+                                    <OutcomeButton
+                                        key={outcome.value}
+                                        label={outcome.value}
+                                        odd={outcome.odd}
+                                        isSelected={isSelected(selectionId)}
+                                        onClick={() => {
+                                            addToBetSlip({
+                                                id: selectionId,
+                                                fixtureId: fixture.id,
+                                                betId: market.id,
+                                                value: outcome.value,
+                                                odd: Number(outcome.odd),
+                                                handicap: outcome.handicap,
+                                                bookmakerId: bookmakerId,
+                                                fixtureName: fixtureName,
+                                                marketName: market.name,
+                                                selectionName: outcome.value,
+                                                odds: Number(outcome.odd)
+                                            });
+                                        }}
+                                    />
+                                );
+                            })}
+                        </MarketAccordion>
+                    ))
+                )}
             </div>
         </div>
     );
