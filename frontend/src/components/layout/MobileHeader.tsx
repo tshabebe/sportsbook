@@ -1,35 +1,64 @@
-import { Menu, Wifi, Battery, Signal } from "lucide-react";
-import { Button } from "../ui/Button";
+import { Battery, Menu, Signal, User, Wifi } from 'lucide-react';
+import {
+  Menu as AriaMenu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+} from 'react-aria-components';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '../ui/Button';
+import { useWalletProfile } from '../../hooks/useWallet';
 
 export function MobileHeader() {
-    return (
-        <header className="flex flex-col bg-element-bg md:hidden border-b border-border-subtle">
-            {/* Status Bar (Mock) */}
-            <div className="flex justify-between items-center px-4 py-1 text-[10px] text-text-muted">
-                <span>9:41</span>
-                <div className="flex items-center gap-1">
-                    <Signal size={10} />
-                    <Wifi size={10} />
-                    <Battery size={10} />
-                </div>
-            </div>
+  const { data } = useWalletProfile();
+  const navigate = useNavigate();
 
-            {/* Main Bar */}
-            <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                    <Menu size={20} className="text-text-contrast" />
-                    <div className="flex items-center gap-1">
-                        <span className="text-text-contrast text-xl font-bold">classicBet</span>
-                    </div>
-                </div>
+  return (
+    <header className="flex flex-col border-b border-border-subtle bg-element-bg md:hidden">
+      <div className="flex items-center justify-between px-4 py-1 text-[10px] text-text-muted">
+        <span>9:41</span>
+        <div className="flex items-center gap-1">
+          <Signal size={10} />
+          <Wifi size={10} />
+          <Battery size={10} />
+        </div>
+      </div>
 
-                <div className="flex items-center gap-2 bg-element-hover-bg rounded-lg p-1 pl-2">
-                    <span className="text-text-contrast text-xs font-medium">10,303.56 €</span>
-                    <Button variant="solid" size="sm" className="w-6 h-6 !px-0 rounded-md">
-                        <span className="text-lg leading-none">+</span>
-                    </Button>
-                </div>
-            </div>
-        </header>
-    );
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <Menu size={20} className="text-text-contrast" />
+          <span className="text-xl font-bold text-text-contrast">classicBet</span>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg bg-element-hover-bg p-1 pl-2">
+          <span className="text-xs font-medium text-text-contrast">€{(data?.balance ?? 0).toFixed(2)}</span>
+          <Button variant="solid" size="sm" className="h-6 w-6 !px-0 rounded-md" aria-label="Top up">
+            <span className="text-lg leading-none">+</span>
+          </Button>
+          <MenuTrigger>
+            <Button variant="outline" size="sm" className="h-6 w-6 !px-0 rounded-md" aria-label="User menu">
+              <User size={12} />
+            </Button>
+            <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg">
+              <AriaMenu
+                aria-label="Mobile account actions"
+                className="min-w-40 outline-none"
+                onAction={(key) => {
+                  if (key === 'track') navigate('/play/track');
+                  if (key === 'retail') navigate('/retail/login');
+                }}
+              >
+                <MenuItem id="track" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
+                  Track Ticket
+                </MenuItem>
+                <MenuItem id="retail" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
+                  Retail Desk
+                </MenuItem>
+              </AriaMenu>
+            </Popover>
+          </MenuTrigger>
+        </div>
+      </div>
+    </header>
+  );
 }

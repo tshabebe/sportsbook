@@ -6,6 +6,7 @@ import {
   createRetailTicketForBet,
   getBetWithSelections,
   getExposureForOutcome,
+  getRetailTicketByTicketId,
   listBetsWithSelections,
   listPendingBetsByFixture,
   settleRetailTicketByBet,
@@ -13,11 +14,16 @@ import {
 } from '../services/db';
 import { walletClient } from '../services/walletClient';
 import { config } from '../services/config';
-import { checkMaxPayout, checkOddsRange, checkStake } from '../services/risk';
+import { checkOddsRange, checkStake } from '../services/risk';
 import { apiFootball } from '../services/apiFootball';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { HttpError } from '../lib/http';
 import { requireBearerToken } from './utils';
+import { expandBetSlipLines, totalPotentialPayout } from '../services/betModes';
+import {
+  extractSelectionDetailsFromSnapshot,
+  isFixtureBlockedForPlacement,
+} from '../services/betValidation';
 
 export const router = Router();
 
@@ -30,261 +36,70 @@ const generateRetailTicketId = (): string => {
   return `TK-${segment(4)}-${segment(4)}-${Date.now().toString(36).toUpperCase()}`;
 };
 
-const extractSelectionsFromItem = (item: any) => {
-  const selections: Array<{
-    betId?: number | string;
-    value: string;
-    odd: number;
-    handicap?: string;
-    suspended?: boolean;
-    bookmakerId?: number;
-  }> = [];
+const checkSlipRisk = (slip: ApiBetSlipInput) => {
+  const stakeCheck = checkStake(slip.stake);
+  if (!stakeCheck.ok) return stakeCheck;
 
-  if (Array.isArray(item?.bookmakers)) {
-    for (const bookmaker of item.bookmakers) {
-      const bookmakerId = bookmaker?.id;
-      const bets = bookmaker?.bets ?? [];
-      for (const bet of bets) {
-        const values = bet?.values ?? [];
-        for (const value of values) {
-          if (value?.value && value?.odd) {
-            selections.push({
-              betId: bet?.id,
-              value: String(value.value),
-              odd: Number(value.odd),
-              handicap: value?.handicap !== undefined ? String(value.handicap) : undefined,
-              suspended: Boolean(value?.suspended),
-              bookmakerId,
-            });
-          }
-        }
-      }
-    }
+  const oddsCheck = checkOddsRange(slip.selections);
+  if (!oddsCheck.ok) return oddsCheck;
+
+  const lines = expandBetSlipLines(slip);
+  const potentialPayout = totalPotentialPayout(lines);
+  if (potentialPayout > config.risk.maxPayout) {
+    return {
+      ok: false as const,
+      code: 'MAX_PAYOUT',
+      message: `Maximum payout is ${config.risk.maxPayout}`,
+      context: { maxPayout: config.risk.maxPayout, payout: potentialPayout },
+    };
   }
 
-  if (Array.isArray(item?.odds)) {
-    for (const bet of item.odds) {
-      const values = bet?.values ?? [];
-      for (const value of values) {
-        if (value?.value && value?.odd) {
-          selections.push({
-            betId: bet?.id,
-            value: String(value.value),
-            odd: Number(value.odd),
-            handicap: value?.handicap !== undefined ? String(value.handicap) : undefined,
-            suspended: Boolean(value?.suspended),
-          });
-        }
-      }
-    }
-  }
-
-  return selections;
+  return { ok: true as const };
 };
 
-const normalizeHandicap = (value?: string | number) =>
-  value === undefined || value === null ? undefined : String(value);
-
-const oddsEqual = (a?: number, b?: number) => {
-  if (a === undefined || b === undefined) return false;
-  return Math.abs(Number(a) - Number(b)) <= 0.001;
-};
-
-const extractSelectionDetailsFromSnapshot = (
-  snapshot: unknown,
-  selection: {
-    betId?: number | string;
-    value: string;
-    odd: number;
-    bookmakerId?: number;
-    handicap?: string | number;
-  },
-  fixtureId: number,
-): { found: boolean; suspended?: boolean } => {
-  if (!snapshot || typeof snapshot !== 'object') return { found: false };
-  const response = (snapshot as { response?: unknown }).response;
-  if (!Array.isArray(response)) return { found: false };
-  const targetHandicap = normalizeHandicap(selection.handicap);
-  const fixtureItems = response.filter(
-    (item) => Number(item?.fixture?.id) === Number(fixtureId),
-  );
-  for (const item of fixtureItems) {
-    const selections = extractSelectionsFromItem(item);
-    for (const s of selections) {
-      if (selection.bookmakerId && s.bookmakerId && Number(s.bookmakerId) !== Number(selection.bookmakerId)) {
-        continue;
-      }
-      if (selection.betId && s.betId && String(s.betId) !== String(selection.betId)) {
-        continue;
-      }
-      if (targetHandicap && normalizeHandicap(s.handicap) !== targetHandicap) {
-        continue;
-      }
-      if (
-        s.value.toLowerCase() === selection.value.toLowerCase() &&
-        oddsEqual(Number(s.odd), Number(selection.odd))
-      ) {
-        return { found: true, suspended: Boolean(s.suspended) };
-      }
-    }
-  }
-  return { found: false };
-};
-
-router.post(
-  '/betslip/validate',
-  asyncHandler(async (req: Request, res: Response) => {
-    const parsed = betSlipSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
-    }
-    const slip: ApiBetSlipInput = parsed.data;
-
-    const stakeCheck = checkStake(slip.stake);
-    if (!stakeCheck.ok) {
-      res.json({ ok: false, error: stakeCheck });
-      return;
-    }
-    const oddsCheck = checkOddsRange(slip.selections);
-    if (!oddsCheck.ok) {
-      res.json({ ok: false, error: oddsCheck });
-      return;
-    }
-    const payoutCheck = checkMaxPayout(slip.stake, slip.selections);
-    if (!payoutCheck.ok) {
-      res.json({ ok: false, error: payoutCheck });
-      return;
-    }
-
-    const results = await Promise.all(
-      slip.selections.map(async (selection) => {
-        // Validation now checks against the latest cached/live odds via the proxy
-        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
-
-        if (!oddsData || !oddsData.response || !oddsData.response.length) {
-          // If we can't find odds, we check if it's because the game started or just missing data
-          // For simplification, we might fail here or check fixture status
+const validateSlipSelections = async (
+  slip: ApiBetSlipInput,
+  withExposure: boolean,
+) => {
+  const lines = expandBetSlipLines(slip);
+  const results = await Promise.all(
+    lines.flatMap((line) =>
+      line.selections.map(async (selection) => {
+        let oddsData;
+        try {
+          oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
+        } catch {
           return {
+            lineKey: line.key,
+            selection,
+            ok: false,
+            error: { code: 'ODDS_UNAVAILABLE', message: 'Odds provider unavailable' },
+          };
+        }
+        if (!oddsData || !oddsData.response || !oddsData.response.length) {
+          return {
+            lineKey: line.key,
             selection,
             ok: false,
             error: { code: 'ODDS_UNAVAILABLE', message: 'Odds currently unavailable for this fixture' },
           };
         }
 
-        const oddsResponse = oddsData.response[0]; // Assuming one fixture per response when queried by ID
-
-        // Validate fixture status (In-Play check)
-        // We might need to fetch fixture status separately if not included in odds, 
-        // but typically odds endpoint doesn't return status. 
-        // Ideally, we should check /fixtures status here too.
-        // For this streamlined version, we will assume if odds are live/available, it's valid, 
-        // but let's do a quick fixture status check to prevent betting on finished games if possible.
-        // Optimization: The proxy caches /fixtures quickly.
-        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        let fixtureData;
+        try {
+          fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        } catch {
+          return {
+            lineKey: line.key,
+            selection,
+            ok: false,
+            error: { code: 'FIXTURE_UNAVAILABLE', message: 'Fixture provider unavailable' },
+          };
+        }
         const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
-        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT', 'AET', 'PEN']);
-
-        // If status is FINISHED or IN_PLAY (and this is a pre-match validator), reject.
-        // Note: The previous logic checked 'LIVE' etc.
-        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
+        if (isFixtureBlockedForPlacement(fixtureStatus)) {
           return {
-            selection,
-            ok: false,
-            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
-          };
-        }
-
-        const detail = extractSelectionDetailsFromSnapshot(
-          oddsData, // passing the full response object which matches the "snapshot" structure
-          selection,
-          selection.fixtureId,
-        );
-
-        if (!detail.found) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'ODDS_CHANGED', message: 'Odds changed or selection no longer available' },
-          };
-        }
-        if (detail.suspended) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
-          };
-        }
-        const exposure = await getExposureForOutcome(
-          selection.fixtureId,
-          selection.value,
-          selection.betId,
-          selection.handicap,
-          selection.bookmakerId,
-        );
-        const projected = exposure + slip.stake * selection.odd;
-        if (projected > config.risk.maxExposurePerOutcome) {
-          return {
-            selection,
-            ok: false,
-            error: {
-              code: 'MAX_EXPOSURE',
-              message: 'Exposure limit reached for this outcome',
-            },
-          };
-        }
-        return { selection, ok: true };
-      }),
-    );
-    const ok = results.every((r) => r.ok);
-    res.json({ ok, results });
-  }),
-);
-
-router.post(
-  '/betslip/place',
-  asyncHandler(async (req: Request, res: Response) => {
-    const token = requireBearerToken(req);
-    const parsed = betSlipSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
-    }
-    const slip: ApiBetSlipInput = parsed.data;
-    const stakeCheck = checkStake(slip.stake);
-    if (!stakeCheck.ok) {
-      res.status(409).json({ ok: false, error: stakeCheck });
-      return;
-    }
-    const oddsCheck = checkOddsRange(slip.selections);
-    if (!oddsCheck.ok) {
-      res.status(409).json({ ok: false, error: oddsCheck });
-      return;
-    }
-    const payoutCheck = checkMaxPayout(slip.stake, slip.selections);
-    if (!payoutCheck.ok) {
-      res.status(409).json({ ok: false, error: payoutCheck });
-      return;
-    }
-    const profile = (await walletClient.getProfile(token)) as unknown as Record<string, any>;
-    const userData = profile?.userData || profile;
-    const userId = userData?.chatId || userData?.user_id || userData?.id;
-    const username = userData?.username || userData?.userName || 'user';
-
-    const validation = await Promise.all(
-      slip.selections.map(async (selection) => {
-        // Place bet validation: re-check against current proxy odds
-        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
-
-        // Similar validation to /validate
-        if (!oddsData || !oddsData.response || !oddsData.response.length) {
-          return { selection, ok: false, reason: 'Odds unavailable' };
-        }
-
-        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
-        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
-        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT']);
-
-        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
-          return {
+            lineKey: line.key,
             selection,
             ok: false,
             error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
@@ -298,45 +113,119 @@ router.post(
         );
         if (!detail.found) {
           return {
+            lineKey: line.key,
             selection,
             ok: false,
-            error: { code: 'ODDS_CHANGED', message: 'Odds changed since selection' },
+            error: { code: 'ODDS_CHANGED', message: 'Odds changed or selection no longer available' },
           };
         }
         if (detail.suspended) {
           return {
+            lineKey: line.key,
             selection,
             ok: false,
             error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
           };
         }
-        const exposure = await getExposureForOutcome(
-          selection.fixtureId,
-          selection.value,
-          selection.betId,
-          selection.handicap,
-          selection.bookmakerId,
-        );
-        const projected = exposure + slip.stake * selection.odd;
-        if (projected > config.risk.maxExposurePerOutcome) {
-          return {
-            selection,
-            ok: false,
-            error: {
-              code: 'MAX_EXPOSURE',
-              message: 'Exposure limit reached for this outcome',
-            },
-          };
+
+        if (withExposure) {
+          let exposure = 0;
+          try {
+            exposure = await getExposureForOutcome(
+              selection.fixtureId,
+              selection.value,
+              selection.betId,
+              selection.handicap,
+              selection.bookmakerId,
+            );
+          } catch {
+            return {
+              lineKey: line.key,
+              selection,
+              ok: false,
+              error: {
+                code: 'EXPOSURE_UNAVAILABLE',
+                message: 'Exposure check unavailable',
+              },
+            };
+          }
+          const projected = exposure + line.stake * selection.odd;
+          if (projected > config.risk.maxExposurePerOutcome) {
+            return {
+              lineKey: line.key,
+              selection,
+              ok: false,
+              error: {
+                code: 'MAX_EXPOSURE',
+                message: 'Exposure limit reached for this outcome',
+              },
+            };
+          }
         }
-        return { selection, ok: true };
+
+        return { lineKey: line.key, selection, ok: true };
       }),
-    );
-    const ok = validation.every((r) => r.ok);
-    if (!ok) {
+    ),
+  );
+
+  return { lines, results, ok: results.every((r) => r.ok) };
+};
+
+router.post(
+  '/betslip/validate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const parsed = betSlipSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
+    }
+    const slip: ApiBetSlipInput = parsed.data;
+    const riskCheck = checkSlipRisk(slip);
+    if (!riskCheck.ok) {
+      res.json({ ok: false, error: riskCheck });
+      return;
+    }
+
+    const validation = await validateSlipSelections(slip, true);
+    res.json({
+      ok: validation.ok,
+      mode: slip.mode,
+      lines: validation.lines.map((line) => ({
+        key: line.key,
+        stake: line.stake,
+        potentialPayout: line.potentialPayout,
+        selections: line.selections.length,
+      })),
+      totalPotentialPayout: totalPotentialPayout(validation.lines),
+      results: validation.results,
+    });
+  }),
+);
+
+router.post(
+  '/betslip/place',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = requireBearerToken(req);
+    const parsed = betSlipSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
+    }
+    const slip: ApiBetSlipInput = parsed.data;
+    const riskCheck = checkSlipRisk(slip);
+    if (!riskCheck.ok) {
+      res.status(409).json({ ok: false, error: riskCheck });
+      return;
+    }
+    const profile = (await walletClient.getProfile(token)) as unknown as Record<string, any>;
+    const userData = profile?.userData || profile;
+    const userId = userData?.chatId || userData?.user_id || userData?.id;
+    const username = userData?.username || userData?.userName || 'user';
+
+    const validation = await validateSlipSelections(slip, true);
+    if (!validation.ok) {
       res.status(409).json({
         ok: false,
-        reason: 'Odds changed or missing snapshot',
-        validation,
+        reason: 'Odds changed or unavailable',
+        validation: validation.results,
       });
       return;
     }
@@ -352,15 +241,28 @@ router.post(
       transaction_id: debitTx,
     });
 
-    let betId: number | null = null;
+    const lineBetIds: number[] = [];
     try {
-      betId = await createBetWithSelections(
-        betRef,
-        slip,
-        { id: Number(userId) || undefined, username },
-        'pending',
-        debitTx,
-      );
+      for (const [index, line] of validation.lines.entries()) {
+        const lineSlip: ApiBetSlipInput = {
+          ...slip,
+          selections: line.selections,
+          stake: line.stake,
+          mode: 'multiple',
+          systemSize: undefined,
+        };
+        const lineBetId = await createBetWithSelections(
+          `${betRef}_L${index + 1}`,
+          lineSlip,
+          { id: Number(userId) || undefined, username },
+          'pending',
+          debitTx,
+        );
+        if (!lineBetId) {
+          throw new Error(`Failed to create bet line ${index + 1}`);
+        }
+        lineBetIds.push(lineBetId);
+      }
     } catch (dbErr) {
       try {
         await walletClient.credit(token, {
@@ -377,121 +279,142 @@ router.post(
       }
       throw dbErr;
     }
-    if (!betId) {
-      throw new HttpError(
-        503,
-        'DATABASE_UNAVAILABLE',
-        'Database is required to place and persist bets',
-      );
-    }
-    const bet = await getBetWithSelections(betId);
-    res.json({ ok: true, bet });
+    const lineBets = (
+      await Promise.all(lineBetIds.map((id) => getBetWithSelections(id)))
+    ).filter((bet): bet is NonNullable<typeof bet> => Boolean(bet));
+    res.json({
+      ok: true,
+      ticket: {
+        ticketRef: betRef,
+        mode: slip.mode,
+        totalStake: slip.stake,
+        totalPotentialPayout: totalPotentialPayout(validation.lines),
+        lineCount: lineBets.length,
+      },
+      bet: lineBets[0] ?? null,
+      bets: lineBets,
+    });
   }),
 );
 
-router.post(
-  '/betslip/place-retail',
-  asyncHandler(async (req: Request, res: Response) => {
+const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
     const parsed = betSlipSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
     }
     const slip: ApiBetSlipInput = parsed.data;
-    const stakeCheck = checkStake(slip.stake);
-    if (!stakeCheck.ok) {
-      res.status(409).json({ ok: false, error: stakeCheck });
-      return;
-    }
-    const oddsCheck = checkOddsRange(slip.selections);
-    if (!oddsCheck.ok) {
-      res.status(409).json({ ok: false, error: oddsCheck });
-      return;
-    }
-    const payoutCheck = checkMaxPayout(slip.stake, slip.selections);
-    if (!payoutCheck.ok) {
-      res.status(409).json({ ok: false, error: payoutCheck });
+    const riskCheck = checkSlipRisk(slip);
+    if (!riskCheck.ok) {
+      res.status(409).json({ ok: false, error: riskCheck });
       return;
     }
 
-    const validation = await Promise.all(
-      slip.selections.map(async (selection) => {
-        const oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
-        if (!oddsData || !oddsData.response || !oddsData.response.length) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'ODDS_UNAVAILABLE', message: 'Odds currently unavailable for this fixture' },
-          };
-        }
-        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
-        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
-        const inPlayStatuses = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT', 'LIVE', 'FT']);
-        if (fixtureStatus && inPlayStatuses.has(fixtureStatus)) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
-          };
-        }
-
-        const detail = extractSelectionDetailsFromSnapshot(
-          oddsData,
-          selection,
-          selection.fixtureId,
-        );
-        if (!detail.found) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'ODDS_CHANGED', message: 'Odds changed since selection' },
-          };
-        }
-        if (detail.suspended) {
-          return {
-            selection,
-            ok: false,
-            error: { code: 'MARKET_SUSPENDED', message: 'Market suspended' },
-          };
-        }
-        return { selection, ok: true };
-      }),
-    );
-    const ok = validation.every((r) => r.ok);
-    if (!ok) {
+    const validation = await validateSlipSelections(slip, false);
+    if (!validation.ok) {
       res.status(409).json({
         ok: false,
         reason: 'Odds changed or unavailable',
-        validation,
+        validation: validation.results,
       });
       return;
     }
 
-    const ticketId = generateRetailTicketId();
-    const betRef = `retail_${ticketId}`;
-    const betId = await createBetWithSelections(
-      betRef,
-      slip,
-      {},
-      'pending',
-      undefined,
-      { channel: 'online_retail_ticket', ticketId },
-    );
-    if (!betId) {
-      throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
+    const rootTicketId = generateRetailTicketId();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
+    const tickets = [];
+    const bets = [];
+    for (const [index, line] of validation.lines.entries()) {
+      const ticketId =
+        validation.lines.length === 1 ? rootTicketId : `${rootTicketId}-L${index + 1}`;
+      const lineSlip: ApiBetSlipInput = {
+        ...slip,
+        selections: line.selections,
+        stake: line.stake,
+        mode: 'multiple',
+        systemSize: undefined,
+      };
+      const betRef = `retail_${ticketId}`;
+      const betId = await createBetWithSelections(
+        betRef,
+        lineSlip,
+        {},
+        'pending',
+        undefined,
+        { channel: 'online_retail_ticket', ticketId },
+      );
+      if (!betId) {
+        throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
+      }
+      const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
+      const bet = await getBetWithSelections(betId);
+      tickets.push(ticket);
+      bets.push(bet);
     }
 
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
-    const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
-    const bet = await getBetWithSelections(betId);
+    res.json({
+      ok: true,
+      ticketBatchId: rootTicketId,
+      mode: slip.mode,
+      totalStake: slip.stake,
+      totalPotentialPayout: totalPotentialPayout(validation.lines),
+      lineCount: validation.lines.length,
+      tickets: tickets.map((ticket) => ({
+        ticketId: ticket.ticketId,
+        status: ticket.status,
+        expiresAt: ticket.expiresAt,
+      })),
+      bets,
+      ticket: {
+        ticketId: tickets[0]?.ticketId ?? rootTicketId,
+        status: tickets[0]?.status ?? 'open',
+        expiresAt: tickets[0]?.expiresAt ?? null,
+      },
+      bet: bets[0] ?? null,
+    });
+};
+
+router.post(
+  '/betslip/place-retail',
+  asyncHandler(placeRetailTicketFromSlip),
+);
+
+router.post(
+  '/tickets',
+  asyncHandler(placeRetailTicketFromSlip),
+);
+
+router.get(
+  '/tickets/:ticketId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const ticketId = String(req.params.ticketId ?? '').trim();
+    if (!ticketId) {
+      throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
+    }
+
+    const ticket = await getRetailTicketByTicketId(ticketId);
+    if (!ticket) {
+      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    }
 
     res.json({
       ok: true,
       ticket: {
         ticketId: ticket.ticketId,
         status: ticket.status,
+        createdAt: ticket.createdAt,
+        claimedByRetailerId: ticket.claimedByRetailerId,
+        claimedAt: ticket.claimedAt,
+        paidAt: ticket.paidAt,
+        payoutAmount: ticket.payoutAmount,
         expiresAt: ticket.expiresAt,
       },
-      bet,
+      bet: {
+        id: ticket.bet.id,
+        status: ticket.bet.status,
+        stake: ticket.bet.stake,
+        payout: ticket.bet.payout,
+        settledAt: ticket.bet.settledAt,
+      },
     });
   }),
 );

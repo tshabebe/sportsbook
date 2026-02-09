@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import type { Fixture } from '../hooks/useFootball';
+import { formatFixtureDate, formatFixtureTime } from '../lib/date';
+import { useBetSlip } from '../context/BetSlipContext';
 
 interface FixtureRowProps {
     fixture: Fixture;
@@ -7,6 +9,7 @@ interface FixtureRowProps {
 
 export function FixtureRow({ fixture }: FixtureRowProps) {
     const navigate = useNavigate();
+    const { addToBetSlip, bets } = useBetSlip();
 
     // Use simplified odds from hook
     const homeOdd = fixture.odds?.home;
@@ -14,18 +17,44 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
     const awayOdd = fixture.odds?.away;
 
     const handleRowClick = () => {
-        navigate(`/fixture/${fixture.fixture.id}`);
+        navigate(`/play/fixture/${fixture.fixture.id}`);
     };
 
-    const handleOddClick = (e: React.MouseEvent, selection: string) => {
+    const handleOddClick = (e: React.MouseEvent, selection: 'Home' | 'Draw' | 'Away') => {
         e.stopPropagation();
-        console.log(`Bet placed on ${selection} for fixture ${fixture.fixture.id}`);
-        // Future: Add to betslip
+        const rawOdd =
+            selection === 'Home'
+                ? homeOdd
+                : selection === 'Draw'
+                    ? drawOdd
+                    : awayOdd;
+        const parsedOdd = Number(rawOdd);
+        if (!Number.isFinite(parsedOdd) || parsedOdd <= 1) return;
+
+        const selectionId = `${fixture.fixture.id}-1-${selection}`;
+        if (bets.some((b) => b.id === selectionId)) return;
+
+        addToBetSlip({
+            id: selectionId,
+            fixtureId: fixture.fixture.id,
+            betId: 1,
+            value: selection,
+            odd: parsedOdd,
+            bookmakerId: 8,
+            fixtureName: `${fixture.teams.home.name} vs ${fixture.teams.away.name}`,
+            marketName: 'Match Winner',
+            selectionName:
+                selection === 'Home'
+                    ? fixture.teams.home.name
+                    : selection === 'Draw'
+                        ? 'Draw'
+                        : fixture.teams.away.name,
+            odds: parsedOdd,
+        });
     };
 
-    // Format Time (HH:mm)
-    const date = new Date(fixture.fixture.date);
-    const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const time = formatFixtureTime(fixture.fixture.date);
+    const displayDate = formatFixtureDate(fixture.fixture.date);
     const isLive = ['1H', 'HT', '2H', 'ET', 'P', 'LIVE'].includes(fixture.fixture.status.short);
 
     return (
@@ -68,9 +97,9 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
                 {/* 1x2 Odds */}
                 <div className="w-64 grid grid-cols-3 gap-2">
-                    <OddButton label="1" odd={homeOdd} onClick={(e) => handleOddClick(e, '1')} />
-                    <OddButton label="X" odd={drawOdd} onClick={(e) => handleOddClick(e, 'X')} />
-                    <OddButton label="2" odd={awayOdd} onClick={(e) => handleOddClick(e, '2')} />
+                    <OddButton label="1" odd={homeOdd} onClick={(e) => handleOddClick(e, 'Home')} />
+                    <OddButton label="X" odd={drawOdd} onClick={(e) => handleOddClick(e, 'Draw')} />
+                    <OddButton label="2" odd={awayOdd} onClick={(e) => handleOddClick(e, 'Away')} />
                 </div>
 
                 {/* Plus Button for More Markets */}
@@ -94,7 +123,7 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
                         {isLive ? (
                             <span className="text-[#ff3939] font-bold">{fixture.fixture.status.elapsed}' • LIVE</span>
                         ) : (
-                            <span>{time} • {date.toLocaleDateString()}</span>
+                            <span>{time} • {displayDate}</span>
                         )}
                     </div>
                     {/* League Name (Small Context) */}
@@ -123,9 +152,9 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
                 {/* Bottom Row: Odds */}
                 <div className="grid grid-cols-3 gap-2 mt-1">
-                    <OddButton label="1" subLabel={fixture.teams.home.name} odd={homeOdd} onClick={(e) => handleOddClick(e, '1')} />
-                    <OddButton label="X" subLabel="Draw" odd={drawOdd} onClick={(e) => handleOddClick(e, 'X')} />
-                    <OddButton label="2" subLabel={fixture.teams.away.name} odd={awayOdd} onClick={(e) => handleOddClick(e, '2')} />
+                    <OddButton label="1" subLabel={fixture.teams.home.name} odd={homeOdd} onClick={(e) => handleOddClick(e, 'Home')} />
+                    <OddButton label="X" subLabel="Draw" odd={drawOdd} onClick={(e) => handleOddClick(e, 'Draw')} />
+                    <OddButton label="2" subLabel={fixture.teams.away.name} odd={awayOdd} onClick={(e) => handleOddClick(e, 'Away')} />
                 </div>
             </div>
         </div>

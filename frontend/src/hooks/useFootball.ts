@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { FixtureResponse, OddResponse, ApiFootballResponse } from "../types/football";
+import { compareIsoAsc, isPastIso } from "../lib/date";
+
+type LeagueResponseItem = {
+    seasons?: Array<{ current: boolean; year: number }>;
+};
 
 
 // --- Types for Custom Backend Responses ---
@@ -11,19 +16,6 @@ export interface Fixture extends Omit<FixtureResponse, 'odds'> {
         draw: string;
         away: string;
     };
-}
-
-interface League {
-    id: number;
-    name: string;
-    country: string;
-    logo: string | null;
-    type: string | null;
-}
-
-interface PopularLeaguesResponse {
-    ok: boolean;
-    leagues: League[];
 }
 
 // --- Hooks ---
@@ -52,7 +44,7 @@ export const useFixturesSchedule = (leagueId: number, status: string = "NS", nex
 // Helper: Fetch fixtures for a single league using Option B (Odds-First)
 const fetchFixturesForLeague = async (leagueId: number) => {
     // 1. Get current season dynamically
-    const { data: leagueData } = await api.get<ApiFootballResponse<any>>("/football/leagues", {
+    const { data: leagueData } = await api.get<ApiFootballResponse<LeagueResponseItem>>("/football/leagues", {
         params: { id: leagueId, current: true }
     });
 
@@ -97,16 +89,15 @@ const fetchFixturesForLeague = async (leagueId: number) => {
     }
 
     // 3. Extract fixture IDs and odds data (filter for upcoming only)
-    const now = new Date();
     const fixtureOddsMap = new Map<number, { home: string; draw: string; away: string }>();
     const fixtureIds: number[] = [];
 
     for (const odds of allOddsResponses) {
         const fixtureId = odds.fixture?.id;
-        const fixtureDate = odds.fixture?.date ? new Date(odds.fixture.date) : null;
+        const fixtureDate = odds.fixture?.date;
 
         // Skip past fixtures
-        if (!fixtureId || !fixtureDate || fixtureDate < now) continue;
+        if (!fixtureId || !fixtureDate || isPastIso(fixtureDate)) continue;
 
         fixtureIds.push(fixtureId);
 
@@ -181,9 +172,7 @@ export const usePreMatchFixtures = (leagueId: number | null | 0) => {
 
             // Flatten and sort by date
             const allFixtures = results.flat();
-            allFixtures.sort((a, b) =>
-                new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime()
-            );
+            allFixtures.sort((a, b) => compareIsoAsc(a.fixture.date, b.fixture.date));
 
             return allFixtures;
         },
@@ -200,12 +189,12 @@ export const useFixtureDetails = (fixtureId: number) => {
             // Parallel execution for rich context
             const [oddsRes, statsRes, , predictionsRes, eventsRes, fixtureRes] = await Promise.all([
                 api.get<ApiFootballResponse<OddResponse>>("/football/odds", { params: { fixture: fixtureId } }),
-                api.get<ApiFootballResponse<any>>("/football/fixtures/statistics", { params: { fixture: fixtureId } }),
+                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/fixtures/statistics", { params: { fixture: fixtureId } }),
                 // For H2H we need team IDs, but usually we fetch fixture info first. 
                 // To avoid waterfalls, we might split H2H. For now, let's just get the critical odds and stats.
                 Promise.resolve({ data: { response: [] } }), // Placeholder
-                api.get<ApiFootballResponse<any>>("/football/predictions", { params: { fixture: fixtureId } }),
-                api.get<ApiFootballResponse<any>>("/football/fixtures/events", { params: { fixture: fixtureId } }), // updated path
+                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/predictions", { params: { fixture: fixtureId } }),
+                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/fixtures/events", { params: { fixture: fixtureId } }), // updated path
                 api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", { params: { id: fixtureId } })
             ]);
 
@@ -232,7 +221,7 @@ export const useLiveFixtures = (leagueIds?: number[]) => {
     return useQuery({
         queryKey: ["fixtures", "live", leagueIds],
         queryFn: async () => {
-            const params: any = { live: "all" };
+            const params: Record<string, string> = { live: "all" };
             if (leagueIds && leagueIds.length > 0) {
                 params.live = leagueIds.join("-");
             }
@@ -250,7 +239,7 @@ export const useLiveOdds = (leagueId?: number) => {
     return useQuery({
         queryKey: ["odds", "live", leagueId],
         queryFn: async () => {
-            const params: any = {};
+            const params: Record<string, number> = {};
             if (leagueId) params.league = leagueId;
 
             const { data } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds/live", {
@@ -271,8 +260,7 @@ export const useLiveMatches = () => {
         const fixtureId = fixtureItem.fixture.id;
         const liveOddsItem = odds?.find((o) => o?.fixture?.id === fixtureId);
 
-        // Extract 1x2 odds if available from the live odds response
-        // Default structure to prevent UI crashes in MatchCard comp
+        // Extract 1x2 odds if available from the live odds response.
         let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
 
         if (liveOddsItem && liveOddsItem.bookmakers && liveOddsItem.bookmakers.length > 0) {
@@ -297,19 +285,3 @@ export const useLiveMatches = () => {
         isLoading: isFixturesLoading || isOddsLoading
     };
 };
-
-// 4. Top Leagues (Navigation)
-export const useTopLeagues = () => {
-    return useQuery({
-        queryKey: ["leagues", "popular"],
-        queryFn: async () => {
-            const { data } = await api.get<PopularLeaguesResponse>("/football/leagues/popular");
-            if (data.ok) {
-                return data.leagues;
-            }
-            throw new Error("Failed to fetch popular leagues");
-        },
-        staleTime: 60 * 60 * 1000,
-    });
-};
-

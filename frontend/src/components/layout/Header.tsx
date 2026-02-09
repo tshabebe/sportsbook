@@ -1,29 +1,58 @@
-import { Menu, Plus, User } from "lucide-react";
-import { Button } from "../ui/Button";
+import { Menu, Plus, User } from 'lucide-react';
+import {
+  Menu as AriaMenu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+} from 'react-aria-components';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '../ui/Button';
+import { useWalletProfile } from '../../hooks/useWallet';
 
 export function Header() {
-    return (
-        <header className="flex items-center justify-between bg-element-bg h-16 px-4 border-b border-border-subtle">
-            {/* Left: Menu and Logo */}
-            <div className="flex items-center gap-4">
-                <button className="text-text-contrast p-2 hover:bg-element-hover-bg rounded-lg transition-colors">
-                    <Menu size={20} />
-                </button>
-                <div className="flex items-center gap-1">
-                    <span className="text-text-contrast text-xl font-bold">classicBet</span>
-                </div>
-            </div>
+  const { data } = useWalletProfile();
+  const navigate = useNavigate();
 
-            {/* Right: Balance and Buttons */}
-            <div className="flex items-center gap-3">
-                <span className="text-text-contrast text-sm font-medium">10,353.50€</span>
-                <Button variant="solid" size="sm" className="w-8 h-8 !px-0 rounded-full">
-                    <Plus size={18} />
-                </Button>
-                <Button variant="solid" size="sm" className="w-8 h-8 !px-0 rounded-full">
-                    <User size={18} />
-                </Button>
-            </div>
-        </header>
-    );
+  return (
+    <header className="flex h-16 items-center justify-between border-b border-border-subtle bg-element-bg px-4">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" aria-label="Main menu">
+          <Menu size={20} />
+        </Button>
+        <div className="flex items-center gap-1">
+          <span className="text-xl font-bold text-text-contrast">classicBet</span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium text-text-contrast">€{(data?.balance ?? 0).toFixed(2)}</span>
+        <Button variant="solid" size="sm" className="h-8 w-8 !px-0 rounded-full" aria-label="Top up">
+          <Plus size={18} />
+        </Button>
+
+        <MenuTrigger>
+          <Button variant="solid" size="sm" className="h-8 w-8 !px-0 rounded-full" aria-label="Account menu">
+            <User size={18} />
+          </Button>
+          <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg">
+            <AriaMenu
+              aria-label="Account actions"
+              className="min-w-44 outline-none"
+              onAction={(key) => {
+                if (key === 'track') navigate('/play/track');
+                if (key === 'retail') navigate('/retail/login');
+              }}
+            >
+              <MenuItem id="track" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
+                Track Ticket
+              </MenuItem>
+              <MenuItem id="retail" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
+                Retail Desk
+              </MenuItem>
+            </AriaMenu>
+          </Popover>
+        </MenuTrigger>
+      </div>
+    </header>
+  );
 }

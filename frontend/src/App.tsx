@@ -1,21 +1,62 @@
-import { Routes, Route } from "react-router-dom";
-import { Layout } from "./components/layout/Layout";
-import { HomePage } from "./pages/HomePage";
-import { BetSlipPage } from "./pages/BetSlipPage";
-import { FixtureMarketsPage } from './pages/FixtureMarketsPage';
-import { BetSlipProvider } from './context/BetSlipContext';
+import { lazy, Suspense } from "react";
+import { Navigate, Outlet, Routes, Route } from "react-router-dom";
+import { getRetailToken } from "./lib/retailAuth";
+
+const Layout = lazy(() => import("./components/layout/Layout").then((m) => ({ default: m.Layout })));
+const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
+const BetSlipPage = lazy(() => import("./pages/BetSlipPage").then((m) => ({ default: m.BetSlipPage })));
+const FixtureMarketsPage = lazy(() => import("./pages/FixtureMarketsPage").then((m) => ({ default: m.FixtureMarketsPage })));
+const RetailLayout = lazy(() =>
+  import("./components/layout/RetailLayout").then((m) => ({ default: m.RetailLayout })),
+);
+const RetailLoginPage = lazy(() =>
+  import("./pages/retail/RetailLoginPage").then((m) => ({ default: m.RetailLoginPage })),
+);
+const RetailDashboardPage = lazy(() =>
+  import("./pages/retail/RetailDashboardPage").then((m) => ({ default: m.RetailDashboardPage })),
+);
+const TicketTrackerPage = lazy(() =>
+  import("./pages/play/TicketTrackerPage").then((m) => ({ default: m.TicketTrackerPage })),
+);
+
+function RetailGuard() {
+  const token = getRetailToken();
+  if (!token) {
+    return <Navigate to="/retail/login" replace />;
+  }
+  return <Outlet />;
+}
 
 function App() {
   return (
-    <BetSlipProvider>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-app-bg text-text-contrast">
+          Loading...
+        </div>
+      }
+    >
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<Navigate to="/play" replace />} />
+
+        <Route path="/play" element={<Layout />}>
           <Route index element={<HomePage />} />
-          <Route path="/betslip" element={<BetSlipPage />} />
-          <Route path="/fixture/:fixtureId" element={<FixtureMarketsPage />} />
+          <Route path="betslip" element={<BetSlipPage />} />
+          <Route path="fixture/:fixtureId" element={<FixtureMarketsPage />} />
+          <Route path="track" element={<TicketTrackerPage />} />
         </Route>
+
+        <Route path="/retail/login" element={<RetailLoginPage />} />
+        <Route element={<RetailGuard />}>
+          <Route path="/retail" element={<RetailLayout />}>
+            <Route path="dashboard" element={<RetailDashboardPage />} />
+            <Route index element={<Navigate to="/retail/dashboard" replace />} />
+          </Route>
+        </Route>
+
+        <Route path="*" element={<Navigate to="/play" replace />} />
       </Routes>
-    </BetSlipProvider>
+    </Suspense>
   );
 }
 

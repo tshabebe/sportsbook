@@ -75,8 +75,8 @@ export interface FixtureResponse {
 
 export interface ApiFootballResponse<T> {
     get: string;
-    parameters: any;
-    errors: any[];
+    parameters: Record<string, unknown>;
+    errors: unknown[];
     results: number;
     paging: { current: number; total: number };
     response: T[];

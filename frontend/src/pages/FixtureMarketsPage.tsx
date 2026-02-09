@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronUp, ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useBetSlip } from '../context/BetSlipContext';
+import { formatFixtureTime } from '../lib/date';
 
 // --- Types ---
 
@@ -132,7 +133,7 @@ export function FixtureMarketsPage() {
                 </button>
                 <div className="flex-1 text-center pr-10">
                     <div className="text-[10px] text-[#888] uppercase tracking-wider mb-0.5">
-                        {league.name} • {new Date(fixture.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {league.name} • {formatFixtureTime(fixture.date)}
                     </div>
                 </div>
             </div>

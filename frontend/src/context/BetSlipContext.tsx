@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { BetSelectionInput, BetSlipInput } from '../types/backendSchemas';
 
 export interface Bet extends BetSelectionInput {
@@ -10,65 +11,60 @@ export interface Bet extends BetSelectionInput {
     stake?: number;
 }
 
-interface BetSlipContextType {
+interface BetSlipStore {
     bets: Bet[];
+    isOpen: boolean;
     addToBetSlip: (bet: Bet) => void;
     removeFromBetSlip: (betId: string) => void;
     clearBetSlip: () => void;
-    isOpen: boolean;
     toggleBetSlip: () => void;
-    toBetSlipInput: (stake: number) => BetSlipInput;
+    toBetSlipInput: (
+        stake: number,
+        mode: BetSlipInput['mode'],
+        systemSize?: number
+    ) => BetSlipInput;
 }
 
-const BetSlipContext = createContext<BetSlipContextType | undefined>(undefined);
-
-export function BetSlipProvider({ children }: { children: ReactNode }) {
-    const [bets, setBets] = useState<Bet[]>([]);
-    const [isOpen, setIsOpen] = useState(false);
-
-    const addToBetSlip = (bet: Bet) => {
-        setBets(currentBets => {
-            if (currentBets.some(b => b.id === bet.id)) return currentBets;
-            return [...currentBets, bet];
-        });
-        setIsOpen(true);
-    };
-
-    const removeFromBetSlip = (betId: string) => {
-        setBets(currentBets => currentBets.filter(b => b.id !== betId));
-    };
-
-    const clearBetSlip = () => {
-        setBets([]);
-    };
-
-    const toggleBetSlip = () => {
-        setIsOpen(prev => !prev);
-    };
-
-    const toBetSlipInput = (stake: number): BetSlipInput => ({
-        stake,
-        selections: bets.map((bet) => ({
-            fixtureId: bet.fixtureId,
-            betId: bet.betId,
-            value: bet.value,
-            odd: bet.odd,
-            handicap: bet.handicap,
-            bookmakerId: bet.bookmakerId,
-        })),
-    });
-
-    return (
-        <BetSlipContext.Provider value={{ bets, addToBetSlip, removeFromBetSlip, clearBetSlip, isOpen, toggleBetSlip, toBetSlipInput }}>
-            {children}
-        </BetSlipContext.Provider>
-    );
-}
-
-export function useBetSlip() {
-    const context = useContext(BetSlipContext);
-    if (context === undefined) {
-        throw new Error('useBetSlip must be used within a BetSlipProvider');
-    }
-    return context;
-}
+export const useBetSlip = create<BetSlipStore>()(
+    persist(
+        (set, get) => ({
+            bets: [],
+            isOpen: false,
+            addToBetSlip: (bet) => {
+                set((state) => {
+                    if (state.bets.some((b) => b.id === bet.id)) return state;
+                    return { ...state, bets: [...state.bets, bet], isOpen: true };
+                });
+            },
+            removeFromBetSlip: (betId) => {
+                set((state) => ({
+                    ...state,
+                    bets: state.bets.filter((bet) => bet.id !== betId),
+                }));
+            },
+            clearBetSlip: () => {
+                set((state) => ({ ...state, bets: [] }));
+            },
+            toggleBetSlip: () => {
+                set((state) => ({ ...state, isOpen: !state.isOpen }));
+            },
+            toBetSlipInput: (stake, mode, systemSize) => ({
+                stake,
+                mode,
+                systemSize: mode === 'system' ? systemSize : undefined,
+                selections: get().bets.map((bet) => ({
+                    fixtureId: bet.fixtureId,
+                    betId: bet.betId,
+                    value: bet.value,
+                    odd: bet.odd,
+                    handicap: bet.handicap,
+                    bookmakerId: bet.bookmakerId,
+                })),
+            }),
+        }),
+        {
+            name: 'betslip-store-v1',
+            partialize: (state) => ({ bets: state.bets, isOpen: state.isOpen }),
+        },
+    ),
+);
