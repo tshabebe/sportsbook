@@ -44,7 +44,9 @@ export function RetailLayout() {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <Outlet />
+          <div key={location.pathname} className="page-enter">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

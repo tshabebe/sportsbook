@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "tailwindcss-react-aria-components";
+@plugin "tailwindcss-animate";
 
 @theme {
   /* --- Grayscale Semantics (Base) --- */
@@ -77,4 +78,25 @@
 body {
   background-color: var(--color-app-bg);
   color: var(--color-text-contrast);
+}
+
+@keyframes page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: page-enter 220ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none;
+  }
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AxiosError } from 'axios';
 import { Loader2, X } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Button as AriaButton,
   Dialog,
@@ -55,6 +55,7 @@ const betSlipStakeSchema = z.object({
 type BetSlipStakeForm = z.infer<typeof betSlipStakeSchema>;
 
 export function Betslip({ isOpen = true, onClose, className }: BetslipProps) {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<BetType>('single');
   const [systemSize, setSystemSize] = useState<number>(2);
   const [isPlacing, setIsPlacing] = useState(false);
@@ -74,6 +75,10 @@ export function Betslip({ isOpen = true, onClose, className }: BetslipProps) {
   });
 
   const { bets, removeFromBetSlip, clearBetSlip, toBetSlipInput } = useBetSlip();
+  const variantFromPath = (() => {
+    const match = location.pathname.match(/^\/play\/([1-5])$/);
+    return match?.[1] ?? null;
+  })();
   const stake = Number(watch('stake') ?? 0);
 
   const calculateBet = () => {
@@ -243,7 +248,7 @@ export function Betslip({ isOpen = true, onClose, className }: BetslipProps) {
               <SelectValue />
               <span aria-hidden>▾</span>
             </AriaButton>
-            <Popover className="w-(--trigger-width) rounded-md border border-border-subtle bg-element-bg p-1 shadow-lg">
+            <Popover className="w-(--trigger-width) rounded-md border border-border-subtle bg-element-bg p-1 shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
               <ListBox className="outline-none">
                 {Array.from({ length: bets.length - 1 }, (_, i) => i + 2).map((size) => {
                   const numCombos = getCombinations(bets, size).length;
@@ -350,9 +355,9 @@ export function Betslip({ isOpen = true, onClose, className }: BetslipProps) {
       <ModalOverlay
         isOpen={showTicketDialog}
         onOpenChange={setShowTicketDialog}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 data-[entering]:animate-in data-[entering]:fade-in data-[exiting]:animate-out data-[exiting]:fade-out"
       >
-        <Modal className="w-full max-w-md rounded-lg border border-border-subtle bg-element-bg p-4 shadow-xl outline-none">
+        <Modal className="w-full max-w-md rounded-lg border border-border-subtle bg-element-bg p-4 shadow-xl outline-none data-[entering]:animate-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:zoom-out-95">
           <Dialog className="outline-none">
             <h3 className="mb-2 text-lg font-semibold text-text-contrast">Ticket Created</h3>
             <p className="mb-3 text-sm text-text-muted">Save or track your ticket IDs.</p>
@@ -360,7 +365,12 @@ export function Betslip({ isOpen = true, onClose, className }: BetslipProps) {
               {createdTicketIds.map((ticketId) => (
                 <div key={ticketId} className="flex items-center justify-between gap-2">
                   <span className="font-mono">{ticketId}</span>
-                  <Link className="underline" to={`/play/track?ticket=${encodeURIComponent(ticketId)}`}>
+                  <Link
+                    className="underline"
+                    to={`/play/track?ticket=${encodeURIComponent(ticketId)}${
+                      variantFromPath ? `&v=${variantFromPath}` : ''
+                    }`}
+                  >
                     track
                   </Link>
                 </div>

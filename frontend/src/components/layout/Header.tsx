@@ -34,7 +34,7 @@ export function Header() {
           <Button variant="solid" size="sm" className="h-8 w-8 !px-0 rounded-full" aria-label="Account menu">
             <User size={18} />
           </Button>
-          <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg">
+          <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
             <AriaMenu
               aria-label="Account actions"
               className="min-w-44 outline-none"

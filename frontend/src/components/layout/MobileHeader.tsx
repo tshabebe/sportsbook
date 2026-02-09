@@ -39,7 +39,7 @@ export function MobileHeader() {
             <Button variant="outline" size="sm" className="h-6 w-6 !px-0 rounded-md" aria-label="User menu">
               <User size={12} />
             </Button>
-            <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg">
+            <Popover className="rounded-lg border border-border-subtle bg-element-bg p-1 shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
               <AriaMenu
                 aria-label="Mobile account actions"
                 className="min-w-40 outline-none"
