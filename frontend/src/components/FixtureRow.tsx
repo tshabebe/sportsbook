@@ -31,8 +31,7 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
         const parsedOdd = Number(rawOdd);
         if (!Number.isFinite(parsedOdd) || parsedOdd <= 1) return;
 
-        const selectionId = `${fixture.fixture.id}-1-${selection}`;
-        if (bets.some((b) => b.id === selectionId)) return;
+        const selectionId = `${fixture.fixture.id}-mw-1-${selection}`;
 
         addToBetSlip({
             id: selectionId,
@@ -52,6 +51,14 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
             odds: parsedOdd,
         });
     };
+
+    const isSelectionActive = (selection: 'Home' | 'Draw' | 'Away') =>
+        bets.some(
+            (b) =>
+                b.fixtureId === fixture.fixture.id &&
+                String(b.betId) === '1' &&
+                b.value === selection,
+        );
 
     const time = formatFixtureTime(fixture.fixture.date);
     const displayDate = formatFixtureDate(fixture.fixture.date);
@@ -97,9 +104,9 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
                 {/* 1x2 Odds */}
                 <div className="w-64 grid grid-cols-3 gap-2">
-                    <OddButton label="1" odd={homeOdd} onClick={(e) => handleOddClick(e, 'Home')} />
-                    <OddButton label="X" odd={drawOdd} onClick={(e) => handleOddClick(e, 'Draw')} />
-                    <OddButton label="2" odd={awayOdd} onClick={(e) => handleOddClick(e, 'Away')} />
+                    <OddButton label="1" odd={homeOdd} isSelected={isSelectionActive('Home')} onClick={(e) => handleOddClick(e, 'Home')} />
+                    <OddButton label="X" odd={drawOdd} isSelected={isSelectionActive('Draw')} onClick={(e) => handleOddClick(e, 'Draw')} />
+                    <OddButton label="2" odd={awayOdd} isSelected={isSelectionActive('Away')} onClick={(e) => handleOddClick(e, 'Away')} />
                 </div>
 
                 {/* Plus Button for More Markets */}
@@ -152,9 +159,9 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
                 {/* Bottom Row: Odds */}
                 <div className="grid grid-cols-3 gap-2 mt-1">
-                    <OddButton label="1" subLabel={fixture.teams.home.name} odd={homeOdd} onClick={(e) => handleOddClick(e, 'Home')} />
-                    <OddButton label="X" subLabel="Draw" odd={drawOdd} onClick={(e) => handleOddClick(e, 'Draw')} />
-                    <OddButton label="2" subLabel={fixture.teams.away.name} odd={awayOdd} onClick={(e) => handleOddClick(e, 'Away')} />
+                    <OddButton label="1" subLabel={fixture.teams.home.name} odd={homeOdd} isSelected={isSelectionActive('Home')} onClick={(e) => handleOddClick(e, 'Home')} />
+                    <OddButton label="X" subLabel="Draw" odd={drawOdd} isSelected={isSelectionActive('Draw')} onClick={(e) => handleOddClick(e, 'Draw')} />
+                    <OddButton label="2" subLabel={fixture.teams.away.name} odd={awayOdd} isSelected={isSelectionActive('Away')} onClick={(e) => handleOddClick(e, 'Away')} />
                 </div>
             </div>
         </div>
@@ -162,16 +169,20 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 }
 
 // Sub-component for Odds Button
-function OddButton({ label, subLabel, odd, onClick }: { label: string, subLabel?: string, odd: string | number | undefined, onClick: (e: React.MouseEvent) => void }) {
+function OddButton({ label, subLabel, odd, isSelected, onClick }: { label: string, subLabel?: string, odd: string | number | undefined, isSelected?: boolean, onClick: (e: React.MouseEvent) => void }) {
     const displayOdd = odd ? odd : '-';
 
     return (
         <button
             onClick={onClick}
-            className="flex flex-col items-center justify-center bg-[#282828] hover:bg-[#333] active:bg-[#ffd60a]/20 rounded py-2 px-1 transition-colors group/btn h-full w-full"
+            className={`flex h-full w-full flex-col items-center justify-center rounded py-2 px-1 transition-colors group/btn ${
+                isSelected
+                    ? 'bg-[#ffd60a] text-[#1d1d1d]'
+                    : 'bg-[#282828] hover:bg-[#333] active:bg-[#ffd60a]/20'
+            }`}
         >
-            <span className="text-[#c8c8c8] text-[10px] mb-0.5 truncate w-full text-center px-1">{subLabel || label}</span>
-            <span className="text-[#ffd60a] text-[13px] font-bold group-hover/btn:text-[#ffe55c]">{displayOdd}</span>
+            <span className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-[#1d1d1d]/80' : 'text-[#c8c8c8]'}`}>{subLabel || label}</span>
+            <span className={`text-[13px] font-bold ${isSelected ? 'text-[#1d1d1d]' : 'text-[#ffd60a] group-hover/btn:text-[#ffe55c]'}`}>{displayOdd}</span>
         </button>
     );
 }

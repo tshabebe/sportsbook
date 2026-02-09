@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { CalendarDays, ChevronDown, ChevronsUpDown, SlidersHorizontal, X } from 'lucide-react';
+import { api } from '../../lib/api';
 import { usePlayShowcaseData } from './usePlayShowcaseData';
 
 type TimeFilter = 'all' | '3h' | 'today' | 'tomorrow' | 'weekend' | 'future';
@@ -74,6 +76,32 @@ export function PlayVariant3Page() {
 
   const leagueName = leagueFilter || events[0]?.league.name || 'Events';
   const country = events[0]?.league.country || '';
+
+  const marketCountQueries = useQueries({
+    queries: events.map((event) => ({
+      queryKey: ['fixture-market-count', event.fixture.id],
+      queryFn: async () => {
+        const { data } = await api.get('/football/odds', {
+          params: { fixture: event.fixture.id, bookmaker: 8 },
+        });
+        const bookmaker = data.response?.[0]?.bookmakers?.[0];
+        if (!bookmaker?.bets) return 0;
+        return bookmaker.bets.reduce(
+          (sum: number, bet: { values?: Array<unknown> }) => sum + (bet.values?.length ?? 0),
+          0,
+        );
+      },
+      staleTime: 60 * 1000,
+      enabled: Boolean(event.fixture.id),
+    })),
+  });
+
+  const marketCountByFixture = useMemo(() => {
+    return events.reduce<Record<number, number | null>>((acc, event, idx) => {
+      acc[event.fixture.id] = marketCountQueries[idx]?.data ?? null;
+      return acc;
+    }, {});
+  }, [events, marketCountQueries]);
 
   if (isLoading) return <LayoutSkeleton />;
 
@@ -159,7 +187,7 @@ export function PlayVariant3Page() {
         </div>
 
         <div>
-          {events.map((event, idx) => (
+          {events.map((event) => (
             <div key={event.fixture.id} className="border-b border-border-subtle last:border-b-0">
               <Link to={`/play/fixture/${event.fixture.id}`} className="flex items-stretch justify-between gap-2 px-3 py-2.5 hover:bg-element-hover-bg">
                 <div className="min-w-0">
@@ -168,7 +196,9 @@ export function PlayVariant3Page() {
                   <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-muted">
                     <span>{String(event.fixture.id).slice(-4)} |</span>
                     <span>{timeLabel(event.fixture.date)}</span>
-                    <span className="rounded bg-app-bg px-1.5 py-0.5">+{600 + ((event.fixture.id + idx) % 2800)}</span>
+                    <span className="rounded bg-app-bg px-1.5 py-0.5">
+                      +{marketCountByFixture[event.fixture.id] ?? '...'}
+                    </span>
                   </div>
                 </div>
 

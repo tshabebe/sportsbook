@@ -32,8 +32,21 @@ export const useBetSlip = create<BetSlipStore>()(
             isOpen: false,
             addToBetSlip: (bet) => {
                 set((state) => {
-                    if (state.bets.some((b) => b.id === bet.id)) return state;
-                    return { ...state, bets: [...state.bets, bet], isOpen: true };
+                    const sameSelectionIndex = state.bets.findIndex((b) => b.id === bet.id);
+                    if (sameSelectionIndex >= 0) {
+                        // Toggle off when clicking an already selected outcome.
+                        return {
+                            ...state,
+                            bets: state.bets.filter((b) => b.id !== bet.id),
+                        };
+                    }
+
+                    // Sportsbook behavior: one active outcome per fixture+market in a ticket.
+                    const withoutSameMarket = state.bets.filter(
+                        (b) => !(b.fixtureId === bet.fixtureId && String(b.betId) === String(bet.betId)),
+                    );
+
+                    return { ...state, bets: [...withoutSameMarket, bet], isOpen: true };
                 });
             },
             removeFromBetSlip: (betId) => {

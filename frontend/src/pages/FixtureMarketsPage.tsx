@@ -139,7 +139,7 @@ export function FixtureMarketsPage() {
   const navigate = useNavigate();
   const { addToBetSlip, bets } = useBetSlip();
   const [activeCategory, setActiveCategory] = useState<MarketCategoryKey>('all');
-  const [openMarkets, setOpenMarkets] = useState<Record<number, boolean>>({});
+  const [openMarkets, setOpenMarkets] = useState<Record<string, boolean>>({});
 
   const { data: fixtureDetails, isLoading: isLoadingFixture } = useQuery({
     queryKey: ['fixture-details', fixtureId],
@@ -207,8 +207,8 @@ export function FixtureMarketsPage() {
 
   const visibleMarkets = categorized[activeCategory];
 
-  const toggleMarket = (marketId: number) => {
-    setOpenMarkets((prev) => ({ ...prev, [marketId]: !prev[marketId] }));
+  const toggleMarket = (marketKey: string) => {
+    setOpenMarkets((prev) => ({ ...prev, [marketKey]: !prev[marketKey] }));
   };
 
   const isSelected = (selectionId: string) => bets.some((b) => b.id === selectionId);
@@ -263,15 +263,17 @@ export function FixtureMarketsPage() {
             No markets available in this category.
           </div>
         ) : (
-          visibleMarkets.map((market) => (
+          visibleMarkets.map((market, marketIdx) => {
+            const marketKey = `${market.id}-${market.name}-${marketIdx}`;
+            return (
             <MarketAccordion
-              key={market.id}
+              key={marketKey}
               title={market.name}
-              isOpen={openMarkets[market.id] ?? (activeCategory === 'main' || activeCategory === 'all')}
-              onToggle={() => toggleMarket(market.id)}
+              isOpen={openMarkets[marketKey] ?? (activeCategory === 'main' || activeCategory === 'all')}
+              onToggle={() => toggleMarket(marketKey)}
             >
               {market.values.map((outcome, idx) => {
-                const selectionId = `${fixture.id}-${market.id}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;
+                const selectionId = `${fixture.id}-${marketKey}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;
                 return (
                   <OutcomeButton
                     key={`${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`}
@@ -298,7 +300,7 @@ export function FixtureMarketsPage() {
                 );
               })}
             </MarketAccordion>
-          ))
+          )})
         )}
       </div>
     </div>
