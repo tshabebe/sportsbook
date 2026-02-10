@@ -5,9 +5,6 @@ import {
   Popover,
   Select,
   SelectValue,
-  Tab,
-  TabList,
-  Tabs,
   Button as AriaButton,
 } from 'react-aria-components';
 import dayjs from 'dayjs';
@@ -22,10 +19,12 @@ type DateFilter = 'all' | 'today' | 'tomorrow' | 'next7d';
 const LEAGUES = [
   { id: 0, name: 'All Leagues' },
   { id: 39, name: 'Premier League' },
-  { id: 140, name: 'La Liga' },
-  { id: 135, name: 'Serie A' },
-  { id: 78, name: 'Bundesliga' },
+  { id: 40, name: 'Championship' },
+  { id: 88, name: 'Eredivisie' },
   { id: 61, name: 'Ligue 1' },
+  { id: 78, name: 'Bundesliga' },
+  { id: 135, name: 'Serie A' },
+  { id: 140, name: 'La Liga' },
 ] as const;
 
 export function HomePage() {
@@ -42,16 +41,22 @@ export function HomePage() {
 
   const fixtures = useMemo(() => {
     if (!rawFixtures) return [];
-    if (activeTab !== 'prematch' || dateFilter === 'all') return rawFixtures;
+    let nextFixtures = rawFixtures;
+
+    if (selectedLeagueId !== 0) {
+      nextFixtures = nextFixtures.filter((fixture) => fixture.league.id === selectedLeagueId);
+    }
+
+    if (activeTab !== 'prematch' || dateFilter === 'all') return nextFixtures;
 
     const now = dayjs();
-    return rawFixtures.filter((fixture) => {
+    return nextFixtures.filter((fixture) => {
       const at = dayjs(fixture.fixture.date);
       if (dateFilter === 'today') return at.isSame(now, 'day');
       if (dateFilter === 'tomorrow') return at.isSame(now.add(1, 'day'), 'day');
       return at.isAfter(now) && at.isBefore(now.add(7, 'day').endOf('day'));
     });
-  }, [activeTab, dateFilter, rawFixtures]);
+  }, [activeTab, dateFilter, rawFixtures, selectedLeagueId]);
 
   const groupedFixtures = useMemo(() => {
     return fixtures.reduce((groups, fixture) => {
@@ -72,54 +77,42 @@ export function HomePage() {
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 pb-20 md:pb-0">
       <PromotionsCarousel />
 
-      <Tabs
-        selectedKey={activeTab}
-        onSelectionChange={(key) => setActiveTab(key as ViewTab)}
-        className="rounded-xl bg-[#1d1d1d] p-1"
-      >
-        <TabList aria-label="Fixture feed mode" className="grid grid-cols-2 gap-2">
-          <Tab
-            id="prematch"
-            className="rounded-lg px-4 py-3 text-sm font-semibold text-[#c8c8c8] outline-none transition data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+      <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setActiveTab('prematch')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              activeTab === 'prematch' ? 'bg-[#ffd60a] text-[#1d1d1d]' : 'bg-[#2a2a2a] text-[#c8c8c8]'
+            }`}
           >
             Pre-Match
-          </Tab>
-          <Tab
-            id="live"
-            className="rounded-lg px-4 py-3 text-sm font-semibold text-[#c8c8c8] outline-none transition data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+          </button>
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
+              activeTab === 'live' ? 'bg-[#ffd60a] text-[#1d1d1d]' : 'bg-[#2a2a2a] text-[#c8c8c8]'
+            }`}
           >
-            Live Events
-          </Tab>
-        </TabList>
-      </Tabs>
+            Live
+          </button>
+          <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-[#c8c8c8]">League</span>
+          <div className="flex flex-wrap gap-1.5">
+            {LEAGUES.map((league) => (
+              <button
+                key={league.id}
+                onClick={() => setSelectedLeagueId(league.id)}
+                className={`rounded-md px-2.5 py-1 text-[11px] ${
+                  selectedLeagueId === league.id ? 'bg-[#ffd60a] text-[#1d1d1d]' : 'bg-[#2a2a2a] text-[#c8c8c8]'
+                }`}
+              >
+                {league.id === 0 ? 'All' : league.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <Select
-          aria-label="League filter"
-          selectedKey={String(selectedLeagueId)}
-          onSelectionChange={(key) => setSelectedLeagueId(Number(key))}
-          className="w-full"
-        >
-          <AriaButton className="flex w-full items-center justify-between rounded-lg border border-[#333] bg-[#1d1d1d] px-4 py-2 text-sm text-[#fafafa]">
-            <SelectValue />
-            <span aria-hidden>▾</span>
-          </AriaButton>
-          <Popover className="w-(--trigger-width) rounded-lg border border-[#333] bg-[#1d1d1d] p-1 text-[#fafafa] shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
-            <ListBox className="outline-none">
-              {LEAGUES.map((league) => (
-                <ListBoxItem
-                  id={String(league.id)}
-                  key={league.id}
-                  textValue={league.name}
-                  className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
-                >
-                  {league.name}
-                </ListBoxItem>
-              ))}
-            </ListBox>
-          </Popover>
-        </Select>
-
         <Select
           aria-label="Date filter"
           selectedKey={dateFilter}
