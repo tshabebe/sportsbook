@@ -284,8 +284,66 @@ export function HomePage() {
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 pb-20 md:pb-0">
       <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-2.5">
         <div className="flex flex-col gap-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div className="w-full">
+          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {LEAGUES.map((league) => {
+              const isActive = selectedLeagueId === league.id;
+              const count =
+                league.id === 0
+                  ? preMatchFixtures.length
+                  : leagueCounts.get(league.id) ?? 0;
+              return (
+                <button
+                  key={league.id}
+                  type="button"
+                  data-testid={`league-pill-${league.id}`}
+                  onClick={() => handleLeagueChange(league.id)}
+                  className={`shrink-0 inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold ${
+                    isActive
+                      ? 'bg-[#ffd60a] text-[#1d1d1d]'
+                      : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333]'
+                  }`}
+                >
+                  {league.id === 0 ? (
+                    <SoccerIcon />
+                  ) : (
+                    <span aria-hidden className="text-[14px] leading-none">
+                      {leagueIconFor(league.id)}
+                    </span>
+                  )}
+                  <span className="leading-none">{league.id === 0 ? 'All' : league.name}</span>
+                  <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[11px] font-medium">
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {marketOptions.map((option) => {
+                  const isActive = effectiveMarketView === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      data-testid={`market-tab-${option.key}`}
+                      onClick={() => updateParam('market', option.key, '1x2')}
+                      className={`shrink-0 rounded-md px-3.5 py-2 text-sm font-semibold ${
+                        isActive
+                          ? 'bg-[#31ae2f] text-[#041207]'
+                          : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333]'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="w-[170px] shrink-0 sm:w-[190px]">
               <Select
                 aria-label="Date filter"
                 selectedKey={dateFilter}
@@ -344,7 +402,7 @@ export function HomePage() {
               </Select>
             </div>
 
-            <div className="w-full">
+            <div className="w-[170px] shrink-0 sm:w-[210px]">
               <Select
                 aria-label="Additional market filter"
                 selectedKey={
@@ -397,62 +455,6 @@ export function HomePage() {
                 </Popover>
               </Select>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {LEAGUES.map((league) => {
-              const isActive = selectedLeagueId === league.id;
-              const count =
-                league.id === 0
-                  ? preMatchFixtures.length
-                  : leagueCounts.get(league.id) ?? 0;
-              return (
-                <button
-                  key={league.id}
-                  type="button"
-                  data-testid={`league-pill-${league.id}`}
-                  onClick={() => handleLeagueChange(league.id)}
-                  className={`shrink-0 inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-sm font-semibold ${
-                    isActive
-                      ? 'bg-[#ffd60a] text-[#1d1d1d]'
-                      : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333]'
-                  }`}
-                >
-                  {league.id === 0 ? (
-                    <SoccerIcon />
-                  ) : (
-                    <span aria-hidden className="text-[14px] leading-none">
-                      {leagueIconFor(league.id)}
-                    </span>
-                  )}
-                  <span className="leading-none">{league.id === 0 ? 'All' : league.name}</span>
-                  <span className="rounded-full bg-black/20 px-1.5 py-0.5 text-[11px] font-medium">
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {marketOptions.map((option) => {
-              const isActive = effectiveMarketView === option.key;
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  data-testid={`market-tab-${option.key}`}
-                  onClick={() => updateParam('market', option.key, '1x2')}
-                  className={`shrink-0 rounded-md px-3.5 py-2 text-sm font-semibold ${
-                    isActive
-                      ? 'bg-[#31ae2f] text-[#041207]'
-                      : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333]'
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
           </div>
 
           {selectedLeagueId === 0 && isFetchingPre ? (

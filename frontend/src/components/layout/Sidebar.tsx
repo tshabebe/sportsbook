@@ -3,7 +3,6 @@ import { Search } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLeagues } from '../../hooks/useLeagues';
 import { useAllLeaguesPreMatchFixtures } from '../../hooks/useFootball';
-import logo from '../../assets/logo.png';
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -53,10 +52,6 @@ export function Sidebar() {
 
   return (
     <aside className="hidden h-full w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-element-bg md:flex">
-      <div className="flex items-center justify-center border-b border-border-subtle px-4 py-3">
-        <img src={logo} alt="Logo" className="h-9 w-auto object-contain" />
-      </div>
-
       <div className="space-y-1 border-b border-border-subtle bg-app-bg px-4 py-3 text-[11px] text-text-muted">
         <p>1. Pick a league</p>
         <p>2. Select odds in main board</p>
