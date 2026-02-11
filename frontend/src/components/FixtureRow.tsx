@@ -121,35 +121,52 @@ export function FixtureRow({
     extraMarketId !== null
       ? fixture.markets.find((market) => market.id === extraMarketId)
       : undefined;
-  const extraRows = (selectedExtraMarket?.values ?? [])
+  const extraMarketValues = (selectedExtraMarket?.values ?? [])
     .filter((value) => {
       const odd = Number(value.odd);
       return Number.isFinite(odd) && odd > 1;
-    })
-    .slice(0, 3)
-    .map((value) => ({
-      label: formatOutcomeLabel(value.value, value.handicap),
-      selection: value.value,
-      selectionName: formatOutcomeLabel(value.value, value.handicap),
-      odd: value.odd,
-      handicap: value.handicap,
-    }));
-
-  const fallbackExtraRows = (selectedMarketHeaders?.slice(0, 3) ?? ['A', 'B', 'C']).map(
-    (header) => ({
-      label: header,
-      selection: header,
-      selectionName: header,
-      odd: undefined,
-    }),
+    });
+  const extraValueByLabel = new Map(
+    extraMarketValues.map((value) => [formatOutcomeLabel(value.value, value.handicap), value]),
   );
+  const extraColumnLabels =
+    selectedMarketHeaders && selectedMarketHeaders.length > 0
+      ? selectedMarketHeaders.slice(0, 3)
+      : extraMarketValues.slice(0, 3).map((value) => formatOutcomeLabel(value.value, value.handicap));
+  const extraRows =
+    extraColumnLabels.length > 0
+      ? extraColumnLabels.map((label) => {
+          const value = extraValueByLabel.get(label);
+          if (!value) {
+            return {
+              label,
+              selection: label,
+              selectionName: label,
+              odd: undefined,
+            };
+          }
+
+          return {
+            label,
+            selection: value.value,
+            selectionName: formatOutcomeLabel(value.value, value.handicap),
+            odd: value.odd,
+            handicap: value.handicap,
+          };
+        })
+      : ['A', 'B', 'C'].map((label) => ({
+          label,
+          selection: label,
+          selectionName: label,
+          odd: undefined,
+        }));
 
   const market: DisplayMarket =
     extraMarketId !== null
       ? {
           betId: extraMarketId,
           marketName: selectedExtraMarket?.name ?? selectedMarketLabel ?? 'Market',
-          rows: extraRows.length > 0 ? extraRows : fallbackExtraRows,
+          rows: extraRows,
         }
       : marketView === 'double_chance'
         ? {
@@ -221,14 +238,6 @@ export function FixtureRow({
             };
 
   const marketGridClass = market.rows.length === 2 ? 'w-52 grid-cols-2' : 'w-64 grid-cols-3';
-  const mobileMarketLabel =
-    extraMarketId !== null
-      ? selectedExtraMarket?.name ?? selectedMarketLabel ?? 'Market'
-      : marketView === 'double_chance'
-        ? 'DOUBLE CHANCE'
-        : marketView === 'over_under'
-          ? 'OVER/UNDER 2.5'
-          : '1X2';
 
   return (
     <div
@@ -315,37 +324,38 @@ export function FixtureRow({
       </div>
 
       {/* Mobile Layout (< md) */}
-      <div className="flex w-full flex-col gap-3 px-4 py-3 md:hidden">
-        <div className="flex items-center justify-between text-[11px] text-[#c8c8c8]">
-          <span className="flex items-center gap-2 font-semibold text-text-muted">
+      <div className="flex w-full items-center gap-3 px-4 py-3 md:hidden">
+        <div className="flex min-w-0 flex-1 flex-col justify-center">
+          <div className="mb-1 flex items-center gap-2">
             <img
-              src={fixture.league.flag ?? fixture.league.logo}
-              alt={fixture.league.name}
+              src={fixture.teams.home.logo}
+              alt={fixture.teams.home.name}
               className="h-4 w-4 object-contain"
             />
-            {fixture.league.name}
-          </span>
-          <span className="text-xs">{time}</span>
+            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+              {fixture.teams.home.name}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <img
+              src={fixture.teams.away.logo}
+              alt={fixture.teams.away.name}
+              className="h-4 w-4 object-contain"
+            />
+            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+              {fixture.teams.away.name}
+            </span>
+          </div>
+          <span className="mt-1 text-[11px] font-medium text-[#c8c8c8]">{time}</span>
         </div>
 
-        <div className="flex items-center justify-center gap-3 text-[14px] font-semibold text-text-contrast">
-          <span className="text-sm">{fixture.teams.home.name}</span>
-          <img src={fixture.teams.home.logo} alt={fixture.teams.home.name} className="h-6 w-6 object-contain" />
-          <span className="text-[11px] font-medium text-[#8bd2ff]">VS</span>
-          <img src={fixture.teams.away.logo} alt={fixture.teams.away.name} className="h-6 w-6 object-contain" />
-          <span className="text-sm">{fixture.teams.away.name}</span>
-        </div>
-
-        <div className="truncate text-[10px] font-semibold uppercase tracking-[0.4em] text-[#8bd2ff]">
-          {mobileMarketLabel}
-        </div>
-
-        <div className={`grid ${market.rows.length === 2 ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
+        <div className={`grid ${marketGridClass} gap-2`}>
           {market.rows.map((row) => (
             <OddButton
               key={`${row.label}-${row.selection}-${row.handicap ?? 'nohcp'}-mobile`}
               label={row.label}
               odd={row.odd}
+              showLabel={false}
               isSelected={isSelectionActive(market.betId, row.selection, row.handicap)}
               onClick={(e) =>
                 handleOddClick(

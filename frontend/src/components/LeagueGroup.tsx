@@ -69,11 +69,11 @@ export function LeagueGroup({
 
         <div className="flex items-center gap-2">
           {headerTitle ? (
-            <span className="max-w-[200px] truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-[#e6e6e6]">
+            <span className="max-w-[160px] truncate text-[11px] font-semibold text-[#e6e6e6] md:max-w-[200px] md:uppercase md:tracking-[0.08em]">
               {headerTitle}
             </span>
           ) : null}
-          <div className={`${marketHeaderClass} gap-2 text-[12px] font-semibold text-[#f0f0f0]`}>
+          <div className={`${marketHeaderClass} grid gap-2 text-[12px] font-semibold text-[#f0f0f0]`}>
             {marketHeaders.map((header) => (
               <span key={header} className="truncate text-center">
                 {header}

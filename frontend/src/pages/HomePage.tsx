@@ -19,7 +19,7 @@ import {
 import { LeagueGroup } from '../components/LeagueGroup';
 import { LEAGUES } from '../data/leagues';
 
-type DateFilter = 'all' | 'today' | 'tomorrow' | 'next7d';
+type DateFilter = 'all' | 'next3h' | 'future' | 'today' | 'tomorrow' | 'next7d';
 type CoreMarketView = '1x2' | 'double_chance' | 'over_under';
 type ExtraMarketView = `extra_${number}`;
 type MarketView = CoreMarketView | ExtraMarketView;
@@ -27,7 +27,7 @@ type ExtraMarketOption = {
   id: number;
   key: ExtraMarketView;
   label: string;
-  sampleLabels: string[];
+  columnLabels: string[];
 };
 const CORE_MARKET_IDS = new Set([1, 12, 5]);
 
@@ -66,7 +66,11 @@ export function HomePage() {
 
   const dateParam = searchParams.get('date');
   const dateFilter: DateFilter =
-    dateParam === 'today' || dateParam === 'tomorrow' || dateParam === 'next7d'
+    dateParam === 'next3h' ||
+    dateParam === 'future' ||
+    dateParam === 'today' ||
+    dateParam === 'tomorrow' ||
+    dateParam === 'next7d'
       ? dateParam
       : 'all';
   const marketParam = searchParams.get('market');
@@ -104,22 +108,33 @@ export function HomePage() {
       );
     }
 
+    const now = dayjs();
     if (dateFilter === 'all') return nextFixtures;
 
-    const now = dayjs();
     return nextFixtures.filter((fixture) => {
       const at = dayjs(fixture.fixture.date);
+      if (dateFilter === 'next3h') {
+        return at.isAfter(now) && at.isBefore(now.add(3, 'hour').add(1, 'minute'));
+      }
+      if (dateFilter === 'future') return at.isAfter(now);
       if (dateFilter === 'today') return at.isSame(now, 'day');
       if (dateFilter === 'tomorrow') return at.isSame(now.add(1, 'day'), 'day');
       return at.isAfter(now) && at.isBefore(now.add(7, 'day').endOf('day'));
     });
   }, [dateFilter, rawFixtures, selectedLeagueId]);
 
-  const extraMarketOptions = useMemo(() => {
+  const extraMarketOptions = useMemo<ExtraMarketOption[]>(() => {
     const optionMap = new Map<
       number,
-      ExtraMarketOption & { fixtureCount: number }
+      {
+        id: number;
+        key: ExtraMarketView;
+        label: string;
+        fixtureCount: number;
+        labelStats: Map<string, { count: number; firstSeen: number }>;
+      }
     >();
+    let orderCounter = 0;
 
     fixtures.forEach((fixture) => {
       fixture.markets.forEach((market) => {
@@ -134,19 +149,31 @@ export function HomePage() {
 
         const existing = optionMap.get(market.id);
         if (!existing) {
+          const labelStats = new Map<string, { count: number; firstSeen: number }>();
+          selectableValues.forEach((value) => {
+            const label = formatMarketOutcomeLabel(value);
+            labelStats.set(label, { count: 1, firstSeen: orderCounter++ });
+          });
           optionMap.set(market.id, {
             id: market.id,
             key: `extra_${market.id}` as ExtraMarketView,
             label: market.name,
-            sampleLabels: selectableValues
-              .slice(0, 3)
-              .map((value) => formatMarketOutcomeLabel(value)),
             fixtureCount: 1,
+            labelStats,
           });
           return;
         }
 
         existing.fixtureCount += 1;
+        selectableValues.forEach((value) => {
+          const label = formatMarketOutcomeLabel(value);
+          const stat = existing.labelStats.get(label);
+          if (stat) {
+            stat.count += 1;
+            return;
+          }
+          existing.labelStats.set(label, { count: 1, firstSeen: orderCounter++ });
+        });
       });
     });
 
@@ -159,7 +186,13 @@ export function HomePage() {
         id: option.id,
         key: option.key,
         label: option.label,
-        sampleLabels: option.sampleLabels,
+        columnLabels: Array.from(option.labelStats.entries())
+          .sort(
+            ([, a], [, b]) =>
+              b.count - a.count || a.firstSeen - b.firstSeen,
+          )
+          .slice(0, 3)
+          .map(([label]) => label),
       }));
   }, [fixtures]);
 
@@ -275,6 +308,18 @@ export function HomePage() {
                       className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
                     >
                       All Dates
+                    </ListBoxItem>
+                    <ListBoxItem
+                      id="next3h"
+                      className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                    >
+                      In 3 Hours
+                    </ListBoxItem>
+                    <ListBoxItem
+                      id="future"
+                      className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                    >
+                      Future
                     </ListBoxItem>
                     <ListBoxItem
                       id="today"
@@ -458,7 +503,7 @@ export function HomePage() {
                 fixtures={data.fixtures}
                 marketView={effectiveMarketView}
                 selectedMarketLabel={selectedExtraMarket?.label}
-                selectedMarketHeaders={selectedExtraMarket?.sampleLabels}
+                selectedMarketHeaders={selectedExtraMarket?.columnLabels}
               />
             ))}
           </div>

@@ -268,6 +268,10 @@ describe('Home Betting UX', () => {
 
     cy.get('[data-testid="view-tab-live"]').should('not.exist');
     cy.get('[data-testid="date-filter-trigger"]').should('exist');
+    cy.get('[data-testid="date-filter-trigger"]').click();
+    cy.contains('In 3 Hours').should('exist');
+    cy.contains('Future').should('exist');
+    cy.contains('All Dates').click();
     cy.get('[data-testid="extra-market-trigger"]').should('exist');
     cy.get('aside').first().within(() => {
       cy.contains('Search leagues...').should('not.exist');
