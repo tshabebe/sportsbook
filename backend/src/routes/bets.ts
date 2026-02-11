@@ -8,6 +8,7 @@ import {
   getExposureForOutcome,
   getRetailTicketByTicketId,
   listBetsWithSelections,
+  listRetailTicketsByBatchId,
   listPendingBetsByFixture,
   settleRetailTicketByBet,
   updateBetSettlement,
@@ -20,21 +21,15 @@ import { asyncHandler } from '../middleware/asyncHandler';
 import { HttpError } from '../lib/http';
 import { requireBearerToken } from './utils';
 import { expandBetSlipLines, totalPotentialPayout } from '../services/betModes';
+import { ensureSufficientBalance } from '../services/balance';
+import { generateRetailBookCode } from '../services/bookCode';
 import {
   extractSelectionDetailsFromSnapshot,
   isFixtureBlockedForPlacement,
 } from '../services/betValidation';
+import { normalizeBookCodeRoot, rebuildSlipFromStoredLines } from '../services/recreateSlip';
 
 export const router = Router();
-
-const generateRetailTicketId = (): string => {
-  const segment = (length: number) =>
-    Math.random()
-      .toString(36)
-      .slice(2, 2 + length)
-      .toUpperCase();
-  return `TK-${segment(4)}-${segment(4)}-${Date.now().toString(36).toUpperCase()}`;
-};
 
 const checkSlipRisk = (slip: ApiBetSlipInput) => {
   const stakeCheck = checkStake(slip.stake);
@@ -171,6 +166,50 @@ const validateSlipSelections = async (
   return { lines, results, ok: results.every((r) => r.ok) };
 };
 
+type FixtureLookupMeta = {
+  fixtureId: number;
+  fixtureDate: string;
+  leagueName: string;
+  leagueCountry: string;
+  homeName: string;
+  awayName: string;
+};
+
+const marketNameFromBetId = (betId?: number | string): string => {
+  const normalized = Number(betId);
+  if (normalized === 1) return 'Match Winner';
+  if (normalized === 12) return 'Double Chance';
+  if (normalized === 5) return 'Over/Under 2.5';
+  return 'Market';
+};
+
+const selectionNameFromValue = (
+  value: string,
+  betId: number | string | undefined,
+  fixture: FixtureLookupMeta | undefined,
+): string => {
+  const normalizedBetId = Number(betId);
+  const home = fixture?.homeName ?? 'Home';
+  const away = fixture?.awayName ?? 'Away';
+
+  if (normalizedBetId === 1) {
+    if (/^home$/i.test(value)) return home;
+    if (/^away$/i.test(value)) return away;
+    if (/^draw$/i.test(value)) return 'Draw';
+  }
+
+  if (normalizedBetId === 12) {
+    if (/^home\/draw$/i.test(value)) return `${home}/Draw`;
+    if (/^home\/away$/i.test(value)) return `${home}/${away}`;
+    if (/^draw\/away$/i.test(value)) return `Draw/${away}`;
+  }
+
+  return value;
+};
+
+const sanitizeSelectionToken = (value: string): string =>
+  value.replace(/[^a-zA-Z0-9_/-]/g, '_');
+
 router.post(
   '/betslip/validate',
   asyncHandler(async (req: Request, res: Response) => {
@@ -215,11 +254,6 @@ router.post(
       res.status(409).json({ ok: false, error: riskCheck });
       return;
     }
-    const profile = (await walletClient.getProfile(token)) as unknown as Record<string, any>;
-    const userData = profile?.userData || profile;
-    const userId = userData?.chatId || userData?.user_id || userData?.id;
-    const username = userData?.username || userData?.userName || 'user';
-
     const validation = await validateSlipSelections(slip, true);
     if (!validation.ok) {
       res.status(409).json({
@@ -230,16 +264,39 @@ router.post(
       return;
     }
 
+    const profile = (await walletClient.getProfile(token)) as unknown as Record<string, any>;
+    const userData = profile?.userData || profile;
+    const userIdRaw = userData?.chatId || userData?.user_id || userData?.id;
+    const userId = Number(userIdRaw);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new HttpError(401, 'INVALID_WALLET_PROFILE', 'Wallet profile is missing a valid user id');
+    }
+    const username = userData?.username || userData?.userName || 'user';
+
+    const balanceCheck = ensureSufficientBalance(profile, slip.stake);
+    if (!balanceCheck.ok) {
+      res.status(409).json({ ok: false, error: balanceCheck });
+      return;
+    }
+
     const betRef = `bet_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const debitTx = `DEBIT_${betRef}`;
-    await walletClient.debit(token, {
-      chatId: userId,
-      username,
-      amount: slip.stake,
-      game: config.walletGameName,
-      round_id: betRef,
-      transaction_id: debitTx,
-    });
+    try {
+      await walletClient.debit(token, {
+        chatId: userId,
+        username,
+        amount: slip.stake,
+        game: config.walletGameName,
+        round_id: betRef,
+        transaction_id: debitTx,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Wallet debit failed';
+      if (/insufficient|not enough|balance/i.test(message)) {
+        throw new HttpError(409, 'INSUFFICIENT_BALANCE', 'Insufficient balance');
+      }
+      throw new HttpError(502, 'WALLET_DEBIT_FAILED', 'Failed to debit wallet');
+    }
 
     const lineBetIds: number[] = [];
     try {
@@ -254,7 +311,7 @@ router.post(
         const lineBetId = await createBetWithSelections(
           `${betRef}_L${index + 1}`,
           lineSlip,
-          { id: Number(userId) || undefined, username },
+          { id: userId, username },
           'pending',
           debitTx,
         );
@@ -319,13 +376,12 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
       return;
     }
 
-    const rootTicketId = generateRetailTicketId();
+    const rootTicketId = generateRetailBookCode();
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
     const tickets = [];
     const bets = [];
     for (const [index, line] of validation.lines.entries()) {
-      const ticketId =
-        validation.lines.length === 1 ? rootTicketId : `${rootTicketId}-L${index + 1}`;
+      const ticketId = index === 0 ? rootTicketId : `${rootTicketId}-${index + 1}`;
       const lineSlip: ApiBetSlipInput = {
         ...slip,
         selections: line.selections,
@@ -353,6 +409,7 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
 
     res.json({
       ok: true,
+      bookCode: rootTicketId,
       ticketBatchId: rootTicketId,
       mode: slip.mode,
       totalStake: slip.stake,
@@ -381,6 +438,125 @@ router.post(
 router.post(
   '/tickets',
   asyncHandler(placeRetailTicketFromSlip),
+);
+
+router.get(
+  '/tickets/:ticketId/recreate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const requestedTicketId = String(req.params.ticketId ?? '').trim();
+    if (!requestedTicketId) {
+      throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
+    }
+
+    const bookCode = normalizeBookCodeRoot(requestedTicketId);
+    const sourceTickets = await listRetailTicketsByBatchId(bookCode);
+    if (sourceTickets.length === 0) {
+      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    }
+
+    const slip = rebuildSlipFromStoredLines(
+      sourceTickets.map((ticket) => ({
+        stake: ticket.bet.stake,
+        selections: ticket.bet.selections.map((selection) => ({
+          fixtureId: selection.fixtureId,
+          marketBetId: selection.marketBetId,
+          value: selection.value,
+          odd: selection.odd,
+          handicap: selection.handicap,
+          bookmakerId: selection.bookmakerId,
+        })),
+      })),
+    );
+
+    const fixtureLookup = new Map<number, FixtureLookupMeta>();
+    const fixtureIds = Array.from(
+      new Set(slip.selections.map((selection) => selection.fixtureId)),
+    );
+
+    if (fixtureIds.length > 0) {
+      const CHUNK_SIZE = 20;
+      const chunks: number[][] = [];
+      for (let i = 0; i < fixtureIds.length; i += CHUNK_SIZE) {
+        chunks.push(fixtureIds.slice(i, i + CHUNK_SIZE));
+      }
+
+      try {
+        const fixtureResponses = await Promise.all(
+          chunks.map((chunk) =>
+            apiFootball.proxy('/fixtures', { ids: chunk.join('-') }),
+          ),
+        );
+
+        for (const payload of fixtureResponses) {
+          const response = Array.isArray((payload as { response?: unknown }).response)
+            ? ((payload as { response: unknown[] }).response as Array<{
+                fixture?: { id?: number; date?: string };
+                league?: { name?: string; country?: string };
+                teams?: { home?: { name?: string }; away?: { name?: string } };
+              }>)
+            : [];
+
+          for (const fixture of response) {
+            const fixtureId = Number(fixture?.fixture?.id);
+            if (!Number.isFinite(fixtureId) || fixtureId <= 0) continue;
+            fixtureLookup.set(fixtureId, {
+              fixtureId,
+              fixtureDate: fixture?.fixture?.date ?? '',
+              leagueName: fixture?.league?.name ?? '',
+              leagueCountry: fixture?.league?.country ?? '',
+              homeName: fixture?.teams?.home?.name ?? 'Home',
+              awayName: fixture?.teams?.away?.name ?? 'Away',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to enrich recreated slip with fixtures', error);
+      }
+    }
+
+    const bets = slip.selections.map((selection, index) => {
+      const fixture = fixtureLookup.get(selection.fixtureId);
+      const fixtureName = fixture
+        ? `${fixture.homeName} vs ${fixture.awayName}`
+        : `Fixture ${selection.fixtureId}`;
+      const marketName = marketNameFromBetId(selection.betId);
+      const selectionName = selectionNameFromValue(
+        selection.value,
+        selection.betId,
+        fixture,
+      );
+
+      return {
+        id: `${selection.fixtureId}-${selection.betId ?? 'm'}-${sanitizeSelectionToken(selection.value)}-${index + 1}`,
+        fixtureId: selection.fixtureId,
+        betId: selection.betId,
+        value: selection.value,
+        odd: selection.odd,
+        bookmakerId: selection.bookmakerId ?? 8,
+        handicap: selection.handicap,
+        fixtureName,
+        marketName,
+        selectionName,
+        odds: selection.odd,
+        leagueName: fixture?.leagueName ?? '',
+        leagueCountry: fixture?.leagueCountry ?? '',
+        fixtureDate: fixture?.fixtureDate ?? undefined,
+      };
+    });
+
+    res.json({
+      ok: true,
+      bookCode,
+      slip,
+      bets,
+      sourceTickets: sourceTickets.map((ticket) => ({
+        ticketId: ticket.ticketId,
+        status: ticket.status,
+        createdAt: ticket.createdAt,
+        expiresAt: ticket.expiresAt,
+      })),
+    });
+  }),
 );
 
 router.get(

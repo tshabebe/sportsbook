@@ -30,7 +30,10 @@ type TicketResponse = {
 };
 
 const ticketLookupSchema = z.object({
-  ticketId: z.string().min(3, 'Ticket ID is required'),
+  ticketId: z
+    .string()
+    .min(6, 'Ticket ID must be at least 6 characters')
+    .max(64, 'Ticket ID is too long'),
 });
 
 type TicketLookupForm = z.infer<typeof ticketLookupSchema>;

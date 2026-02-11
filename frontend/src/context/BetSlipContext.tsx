@@ -18,6 +18,7 @@ interface BetSlipStore {
     bets: Bet[];
     isOpen: boolean;
     addToBetSlip: (bet: Bet) => void;
+    replaceBetSlip: (bets: Bet[]) => void;
     removeFromBetSlip: (betId: string) => void;
     clearBetSlip: () => void;
     toggleBetSlip: () => void;
@@ -51,6 +52,13 @@ export const useBetSlip = create<BetSlipStore>()(
 
                     return { ...state, bets: [...withoutSameMarket, bet], isOpen: true };
                 });
+            },
+            replaceBetSlip: (bets) => {
+                set((state) => ({
+                    ...state,
+                    bets,
+                    isOpen: true,
+                }));
             },
             removeFromBetSlip: (betId) => {
                 set((state) => ({

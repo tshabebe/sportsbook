@@ -29,11 +29,17 @@ const authHeaders = () => {
 };
 
 const lookupSchema = z.object({
-  ticketId: z.string().min(3, 'Ticket ID is required'),
+  ticketId: z
+    .string()
+    .min(6, 'Ticket ID must be at least 6 characters')
+    .max(64, 'Ticket ID is too long'),
 });
 
 const payoutSchema = z.object({
-  payoutReference: z.string().min(3, 'Payout reference is required'),
+  payoutReference: z
+    .string()
+    .min(8, 'Payout reference must be at least 8 characters')
+    .max(128, 'Payout reference is too long'),
 });
 
 type LookupForm = z.infer<typeof lookupSchema>;
@@ -63,7 +69,7 @@ export function RetailDashboardPage() {
   });
 
   const canClaim = useMemo(() => ticket?.status === 'open', [ticket]);
-  const canPayout = useMemo(() => ticket?.status === 'settled_won_unpaid' || ticket?.status === 'paid', [ticket]);
+  const canPayout = useMemo(() => ticket?.status === 'settled_won_unpaid', [ticket]);
 
   const lookupTicket = async (values: LookupForm) => {
     setLoading(true);

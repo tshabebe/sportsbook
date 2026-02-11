@@ -7,8 +7,50 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
-export const formatFixtureTime = (iso: string): string =>
-  dayjs(iso).tz(dayjs.tz.guess()).format('HH:mm');
+const formatDuration = (totalMinutes: number): string => {
+  if (totalMinutes < 60) {
+    return `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const hourLabel = `${hours} hour${hours === 1 ? '' : 's'}`;
+  if (minutes === 0) return hourLabel;
+  return `${hourLabel} ${minutes} minute${minutes === 1 ? '' : 's'}`;
+};
+
+export const formatFixtureTime = (iso: string): string => {
+  const local = dayjs(iso).tz(dayjs.tz.guess());
+  if (!local.isValid()) return '';
+
+  const now = dayjs().tz(dayjs.tz.guess());
+  const diffMinutes = local.diff(now, 'minute');
+
+  if (diffMinutes < 0) {
+    return `Started ${local.from(now)}`;
+  }
+
+  if (diffMinutes <= 1) {
+    return 'Starting now';
+  }
+
+  if (local.isSame(now, 'day')) {
+    if (diffMinutes <= 360) {
+      return `Starts in ${formatDuration(diffMinutes)}`;
+    }
+    return `Today ${local.format('HH:mm')}`;
+  }
+
+  if (local.isSame(now.add(1, 'day'), 'day')) {
+    return `Tomorrow ${local.format('HH:mm')}`;
+  }
+
+  if (local.isBefore(now.add(7, 'day').endOf('day'))) {
+    return `${local.format('ddd')} ${local.format('HH:mm')}`;
+  }
+
+  return `${local.format('DD MMM')} ${local.format('HH:mm')}`;
+};
 
 export const formatFixtureDate = (iso: string): string =>
   dayjs(iso).tz(dayjs.tz.guess()).format('DD MMM');

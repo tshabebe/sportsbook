@@ -1,318 +1,416 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
-import type { FixtureResponse, OddResponse, ApiFootballResponse } from "../types/football";
-import { compareIsoAsc, isPastIso } from "../lib/date";
-import { getCurrentSeason } from "../lib/seasons";
-
+import { useMemo } from 'react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import type {
+  FixtureResponse,
+  OddResponse,
+  ApiFootballResponse,
+} from '../types/football';
+import { compareIsoAsc, isPastIso } from '../lib/date';
+import { getCurrentSeason } from '../lib/seasons';
 
 type LeagueResponseItem = {
-    seasons?: Array<{ current: boolean; year: number }>;
+  seasons?: Array<{ current: boolean; year: number }>;
 };
-
-
-// --- Types for Custom Backend Responses ---
 
 export interface Fixture extends Omit<FixtureResponse, 'odds'> {
-    odds: {
-        home: string;
-        draw: string;
-        away: string;
+  odds: {
+    home: string;
+    draw: string;
+    away: string;
+    doubleChance?: {
+      homeDraw: string;
+      homeAway: string;
+      drawAway: string;
     };
+    totals?: {
+      over25: string;
+      under25: string;
+    };
+  };
+  markets: FixtureMarket[];
 }
 
-// --- Hooks ---
+export interface FixtureMarketValue {
+  value: string;
+  odd: string;
+  handicap?: string | null;
+}
 
-// 1. Pre-Match (Home Page) - The "Direct" Way (Schedule)
-export const useFixturesSchedule = (leagueId: number, status: string = "NS", next: number = 20) => {
-    return useQuery({
-        queryKey: ["fixtures", "schedule", leagueId, status],
-        queryFn: async () => {
-            const { data } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
-                params: {
-                    league: leagueId,
-                    status: status,
-                    next: next,
-                }
-            });
-            return data.response;
-        },
-        enabled: !!leagueId,
-    });
+export interface FixtureMarket {
+  id: number;
+  name: string;
+  values: FixtureMarketValue[];
+}
+
+export const TARGET_PREMATCH_LEAGUES = [39, 2, 40, 135, 140, 78, 61, 88, 45] as const;
+
+const EMPTY_ODDS: Fixture['odds'] = {
+  home: '',
+  draw: '',
+  away: '',
 };
 
-// 1. Pre-Match (Home Page) - Option B: Odds-First (Efficient)
-// Fetches odds with pagination → extracts fixture IDs → bulk fetches fixtures
-// This is more efficient than N+1 calls (2-4 calls vs 31+ calls)
-// Helper: Fetch fixtures for a single league using Option B (Odds-First)
-const fetchFixturesForLeague = async (leagueId: number, season?: number) => {
-    let currentSeason = season;
+const extractOddsFromBookmaker = (
+  bookmaker: OddResponse['bookmakers'][number] | undefined,
+): { summary: Fixture['odds']; markets: FixtureMarket[] } => {
+  if (!bookmaker) return { summary: { ...EMPTY_ODDS }, markets: [] };
 
-    // 1. Get current season dynamically if not provided
-    if (!currentSeason) {
-        try {
-            const { data: leagueData } = await api.get<ApiFootballResponse<LeagueResponseItem>>("/football/leagues", {
-                params: { id: leagueId, current: true }
-            });
+  const formatted: Fixture['odds'] = { ...EMPTY_ODDS };
+  const markets: FixtureMarket[] = (bookmaker.bets ?? []).map((bet) => ({
+    id: bet.id,
+    name: bet.name,
+    values: (bet.values ?? []).map((value) => ({
+      value: value.value,
+      odd: value.odd,
+      handicap: value.handicap,
+    })),
+  }));
 
-            currentSeason = leagueData.response?.[0]?.seasons?.find(
-                (s: { current: boolean }) => s.current
-            )?.year;
-        } catch (e) {
-            console.error(`Failed to fetch season for league ${leagueId}`, e);
-        }
+  const matchWinner = bookmaker.bets?.find(
+    (bet: { id: number; name: string }) => bet.id === 1 || /match winner|1x2/i.test(bet.name),
+  );
+  if (matchWinner?.values) {
+    formatted.home =
+      matchWinner.values.find((value: { value: string; odd: string }) => value.value === 'Home')
+        ?.odd ?? '';
+    formatted.draw =
+      matchWinner.values.find((value: { value: string; odd: string }) => value.value === 'Draw')
+        ?.odd ?? '';
+    formatted.away =
+      matchWinner.values.find((value: { value: string; odd: string }) => value.value === 'Away')
+        ?.odd ?? '';
+  }
+
+  const doubleChance = bookmaker.bets?.find(
+    (bet: { id: number; name: string }) => bet.id === 12 || /double chance/i.test(bet.name),
+  );
+  if (doubleChance?.values) {
+    formatted.doubleChance = {
+      homeDraw:
+        doubleChance.values.find(
+          (value: { value: string; odd: string }) => /home\/draw|1\/x|1x/i.test(value.value),
+        )?.odd ?? '',
+      homeAway:
+        doubleChance.values.find(
+          (value: { value: string; odd: string }) => /home\/away|1\/2|12/i.test(value.value),
+        )?.odd ?? '',
+      drawAway:
+        doubleChance.values.find(
+          (value: { value: string; odd: string }) => /draw\/away|x\/2|x2/i.test(value.value),
+        )?.odd ?? '',
+    };
+  }
+
+  const overUnder = bookmaker.bets?.find(
+    (bet: { id: number; name: string }) => bet.id === 5 || /over\/under|totals?/i.test(bet.name),
+  );
+  if (overUnder?.values) {
+    const over25 = overUnder.values.find(
+      (value: { value: string; odd: string }) => /over/i.test(value.value) && /2([.,])?5/.test(value.value),
+    );
+    const under25 = overUnder.values.find(
+      (value: { value: string; odd: string }) => /under/i.test(value.value) && /2([.,])?5/.test(value.value),
+    );
+    if (over25 || under25) {
+      formatted.totals = {
+        over25: over25?.odd ?? '',
+        under25: under25?.odd ?? '',
+      };
     }
+  }
 
-    if (!currentSeason) {
-        console.warn("Could not determine current season for league", leagueId);
-        return [];
-    }
+  return { summary: formatted, markets };
+};
 
-    // 2. Fetch ALL pages of odds (Bet365 only, bookmaker=8)
+export const useFixturesSchedule = (
+  leagueId: number,
+  status = 'NS',
+  next = 20,
+) =>
+  useQuery({
+    queryKey: ['fixtures', 'schedule', leagueId, status],
+    queryFn: async () => {
+      const { data } = await api.get<ApiFootballResponse<FixtureResponse>>(
+        '/football/fixtures',
+        {
+          params: {
+            league: leagueId,
+            status,
+            next,
+          },
+        },
+      );
+      return data.response;
+    },
+    enabled: !!leagueId,
+  });
 
-    const allOddsResponses: OddResponse[] = [];
-    let currentPage = 1;
-    let totalPages = 1;
+export const fetchFixturesForLeague = async (
+  leagueId: number,
+  season?: number,
+): Promise<Fixture[]> => {
+  let currentSeason = season;
 
+  if (!currentSeason) {
     try {
-        do {
-            const { data: oddsData } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds", {
-                params: {
-                    league: leagueId,
-                    season: currentSeason,
-                    bookmaker: 8,  // Bet365 only
-                    page: currentPage
-                }
-            });
+      const { data: leagueData } = await api.get<
+        ApiFootballResponse<LeagueResponseItem>
+      >('/football/leagues', {
+        params: { id: leagueId, current: true },
+      });
 
-            if (oddsData.response) {
-                allOddsResponses.push(...oddsData.response);
-            }
-            totalPages = oddsData.paging?.total || 1;
-            currentPage++;
-        } while (currentPage <= totalPages);
-    } catch (e) {
-        console.error(`Failed to fetch odds for league ${leagueId}`, e);
-        return [];
+      currentSeason = leagueData.response?.[0]?.seasons?.find(
+        (s: { current: boolean }) => s.current,
+      )?.year;
+    } catch (error) {
+      console.error(`Failed to fetch season for league ${leagueId}`, error);
     }
+  }
 
-    if (allOddsResponses.length === 0) {
-        return [];
-    }
+  if (!currentSeason) {
+    return [];
+  }
 
-    // 3. Extract fixture IDs and odds data (filter for upcoming only)
-    const fixtureOddsMap = new Map<number, { home: string; draw: string; away: string }>();
-    const fixtureIds: number[] = [];
+  const allOddsResponses: OddResponse[] = [];
+  let currentPage = 1;
+  let totalPages = 1;
 
-    for (const odds of allOddsResponses) {
-        const fixtureId = odds.fixture?.id;
-        const fixtureDate = odds.fixture?.date;
-
-        // Skip past fixtures
-        if (!fixtureId || !fixtureDate || isPastIso(fixtureDate)) continue;
-
-        fixtureIds.push(fixtureId);
-
-        // Extract 1x2 odds from Bet365
-        let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
-        const bookmaker = odds.bookmakers?.[0];
-
-        if (bookmaker) {
-            const matchWinner = bookmaker.bets?.find(
-                (b: { id: number; name: string }) => b.id === 1 || b.name === "Match Winner"
-            );
-
-            if (matchWinner?.values) {
-                formattedOdds = {
-                    home: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Home")?.odd || "1.00",
-                    draw: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Draw")?.odd || "1.00",
-                    away: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Away")?.odd || "1.00",
-                };
-            }
-        }
-
-        fixtureOddsMap.set(fixtureId, formattedOdds);
-    }
-
-    if (fixtureIds.length === 0) {
-        return [];
-    }
-
-    // 4. Fetch fixtures in bulk (max 20 per call)
-    const allFixtures: FixtureResponse[] = [];
-    const CHUNK_SIZE = 20;
-
-    for (let i = 0; i < fixtureIds.length; i += CHUNK_SIZE) {
-        const chunk = fixtureIds.slice(i, i + CHUNK_SIZE);
-        const idsParam = chunk.join("-");
-
-        const { data: fixturesData } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
-            params: { ids: idsParam }
-        });
-
-        if (fixturesData.response) {
-            allFixtures.push(...fixturesData.response);
-        }
-    }
-
-    // 5. Merge fixtures with odds and filter for NS status
-    return allFixtures
-        .filter(f => f.fixture.status.short === "NS")
-        .map(fixture => ({
-            ...fixture,
-            odds: fixtureOddsMap.get(fixture.fixture.id) || { home: "1.00", draw: "1.00", away: "1.00" }
-        }));
-};
-
-// 1. Pre-Match (Home Page) - Option B: Odds-First (Efficient)
-export const usePreMatchFixtures = (leagueId: number | null | 0) => {
-    return useQuery({
-        queryKey: ["fixtures", "prematch", "with-odds", leagueId],
-        queryFn: async () => {
-            // If specific league is selected
-            if (leagueId && leagueId !== 0) {
-                return await fetchFixturesForLeague(leagueId);
-            }
-
-            // If "All Leagues" (0 or null) -> Fetch multiple supported leagues in parallel
-            // Supported: PL(39), Champ(40), Serie A(135), La Liga(140), Bundesliga(78), Ligue 1(61), Eredivisie(88), FA Cup(45)
-            const TARGET_LEAGUES = [39, 2, 40, 135, 140, 78, 61, 88, 45];
-
-            // Optimization: Calculate season client-side once
-            const currentSeason = getCurrentSeason();
-
-            const results = await Promise.all(
-                TARGET_LEAGUES.map(id => fetchFixturesForLeague(id, currentSeason))
-            );
-
-            // Flatten and sort by date
-            const allFixtures = results.flat();
-            allFixtures.sort((a, b) => compareIsoAsc(a.fixture.date, b.fixture.date));
-
-            return allFixtures;
+  try {
+    do {
+      const { data: oddsData } = await api.get<ApiFootballResponse<OddResponse>>(
+        '/football/odds',
+        {
+          params: {
+            league: leagueId,
+            season: currentSeason,
+            bookmaker: 8,
+            page: currentPage,
+          },
         },
-        enabled: true, // Always enabled, handles 0 internally
-        staleTime: 60 * 1000 // Cache for 1 min client-side
-    });
+      );
+
+      if (oddsData.response) {
+        allOddsResponses.push(...oddsData.response);
+      }
+      totalPages = oddsData.paging?.total || 1;
+      currentPage += 1;
+    } while (currentPage <= totalPages);
+  } catch (error) {
+    console.error(`Failed to fetch odds for league ${leagueId}`, error);
+    return [];
+  }
+
+  if (allOddsResponses.length === 0) {
+    return [];
+  }
+
+  const fixtureOddsMap = new Map<number, Fixture['odds']>();
+  const fixtureMarketsMap = new Map<number, FixtureMarket[]>();
+  const fixtureIds = new Set<number>();
+
+  for (const odds of allOddsResponses) {
+    const fixtureId = odds.fixture?.id;
+    const fixtureDate = odds.fixture?.date;
+
+    if (!fixtureId || !fixtureDate || isPastIso(fixtureDate)) continue;
+
+    fixtureIds.add(fixtureId);
+
+    const extracted = extractOddsFromBookmaker(odds.bookmakers?.[0]);
+    fixtureOddsMap.set(fixtureId, extracted.summary);
+    fixtureMarketsMap.set(fixtureId, extracted.markets);
+  }
+
+  const orderedFixtureIds = Array.from(fixtureIds);
+  if (orderedFixtureIds.length === 0) {
+    return [];
+  }
+
+  const CHUNK_SIZE = 20;
+  const chunks: string[] = [];
+  for (let i = 0; i < orderedFixtureIds.length; i += CHUNK_SIZE) {
+    chunks.push(orderedFixtureIds.slice(i, i + CHUNK_SIZE).join('-'));
+  }
+
+  const allFixtures: FixtureResponse[] = [];
+  const fixtureResponses = await Promise.all(
+    chunks.map((idsParam) =>
+      api.get<ApiFootballResponse<FixtureResponse>>('/football/fixtures', {
+        params: { ids: idsParam },
+      }),
+    ),
+  );
+
+  fixtureResponses.forEach((response) => {
+    const fixturesData = response.data.response;
+    if (fixturesData) {
+      allFixtures.push(...fixturesData);
+    }
+  });
+
+  return allFixtures
+    .filter((fixture) => fixture.fixture.status.short === 'NS')
+    .map((fixture) => ({
+      ...fixture,
+      odds: fixtureOddsMap.get(fixture.fixture.id) || { ...EMPTY_ODDS },
+      markets: fixtureMarketsMap.get(fixture.fixture.id) || [],
+    }))
+    .sort((a, b) => compareIsoAsc(a.fixture.date, b.fixture.date));
 };
 
-// 2. Pre-Match (Match Details - "Every Bet Possible")
-export const useFixtureDetails = (fixtureId: number) => {
-    return useQuery({
-        queryKey: ["fixture", "details", fixtureId],
-        queryFn: async () => {
-            // Parallel execution for rich context
-            const [oddsRes, statsRes, , predictionsRes, eventsRes, fixtureRes] = await Promise.all([
-                api.get<ApiFootballResponse<OddResponse>>("/football/odds", { params: { fixture: fixtureId } }),
-                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/fixtures/statistics", { params: { fixture: fixtureId } }),
-                // For H2H we need team IDs, but usually we fetch fixture info first. 
-                // To avoid waterfalls, we might split H2H. For now, let's just get the critical odds and stats.
-                Promise.resolve({ data: { response: [] } }), // Placeholder
-                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/predictions", { params: { fixture: fixtureId } }),
-                api.get<ApiFootballResponse<Record<string, unknown>>>("/football/fixtures/events", { params: { fixture: fixtureId } }), // updated path
-                api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", { params: { id: fixtureId } })
-            ]);
+export const usePreMatchFixtures = (leagueId: number | null | 0) =>
+  useQuery({
+    queryKey: ['fixtures', 'prematch', 'league', leagueId],
+    queryFn: async () => {
+      if (!leagueId || leagueId === 0) return [];
+      return fetchFixturesForLeague(leagueId, getCurrentSeason());
+    },
+    enabled: Boolean(leagueId && leagueId !== 0),
+    staleTime: 60 * 1000,
+  });
 
-            const odds = oddsRes.data.response?.[0];
-            const stats = statsRes.data.response;
-            const predictions = predictionsRes.data.response?.[0];
-            const events = eventsRes.data.response;
-            const fixtureData = fixtureRes.data.response?.[0];
+export const useAllLeaguesPreMatchFixtures = (enabled = true) => {
+  const season = getCurrentSeason();
+  const queries = useQueries({
+    queries: TARGET_PREMATCH_LEAGUES.map((leagueId) => ({
+      queryKey: ['fixtures', 'prematch', 'league', leagueId],
+      queryFn: () => fetchFixturesForLeague(leagueId, season),
+      staleTime: 60 * 1000,
+      enabled,
+    })),
+  });
 
-            return {
-                fixture: fixtureData,
-                odds,
-                stats,
-                predictions,
-                events
-            };
+  const data = useMemo(() => {
+    const merged = queries.flatMap((query) => query.data ?? []);
+    merged.sort((a, b) => compareIsoAsc(a.fixture.date, b.fixture.date));
+    return merged;
+  }, [queries]);
+
+  const isLoading =
+    data.length === 0 && queries.some((query) => query.isPending || query.isFetching);
+  const isFetching = queries.some((query) => query.isFetching);
+  const error = queries.find((query) => query.error)?.error ?? null;
+
+  return {
+    data,
+    isLoading,
+    isFetching,
+    error,
+  };
+};
+
+export const useFixtureDetails = (fixtureId: number) =>
+  useQuery({
+    queryKey: ['fixture', 'details', fixtureId],
+    queryFn: async () => {
+      const [oddsRes, statsRes, predictionsRes, eventsRes, fixtureRes] =
+        await Promise.all([
+          api.get<ApiFootballResponse<OddResponse>>('/football/odds', {
+            params: { fixture: fixtureId },
+          }),
+          api.get<ApiFootballResponse<Record<string, unknown>>>(
+            '/football/fixtures/statistics',
+            {
+              params: { fixture: fixtureId },
+            },
+          ),
+          api.get<ApiFootballResponse<Record<string, unknown>>>('/football/predictions', {
+            params: { fixture: fixtureId },
+          }),
+          api.get<ApiFootballResponse<Record<string, unknown>>>('/football/fixtures/events', {
+            params: { fixture: fixtureId },
+          }),
+          api.get<ApiFootballResponse<FixtureResponse>>('/football/fixtures', {
+            params: { id: fixtureId },
+          }),
+        ]);
+
+      const odds = oddsRes.data.response?.[0];
+      const stats = statsRes.data.response;
+      const predictions = predictionsRes.data.response?.[0];
+      const events = eventsRes.data.response;
+      const fixtureData = fixtureRes.data.response?.[0];
+
+      return {
+        fixture: fixtureData,
+        odds,
+        stats,
+        predictions,
+        events,
+      };
+    },
+    enabled: !!fixtureId,
+  });
+
+export const useLiveFixtures = (leagueIds?: number[], enabled = true) =>
+  useQuery({
+    queryKey: ['fixtures', 'live', leagueIds],
+    queryFn: async () => {
+      const params: Record<string, string> = { live: 'all' };
+      if (leagueIds && leagueIds.length > 0) {
+        params.live = leagueIds.join('-');
+      }
+
+      const { data } = await api.get<ApiFootballResponse<FixtureResponse>>(
+        '/football/fixtures',
+        {
+          params,
         },
-        enabled: !!fixtureId,
-    });
-};
+      );
+      return data.response;
+    },
+    refetchInterval: enabled ? 15000 : false,
+    enabled,
+  });
 
-// 3. Live Betting (In-Play)
-export const useLiveFixtures = (leagueIds?: number[]) => {
-    return useQuery({
-        queryKey: ["fixtures", "live", leagueIds],
-        queryFn: async () => {
-            const params: Record<string, string> = { live: "all" };
-            if (leagueIds && leagueIds.length > 0) {
-                params.live = leagueIds.join("-");
-            }
+export const useLiveOdds = (leagueId?: number, enabled = true) =>
+  useQuery({
+    queryKey: ['odds', 'live', leagueId],
+    queryFn: async () => {
+      const params: Record<string, number> = {};
+      if (leagueId) params.league = leagueId;
 
-            const { data } = await api.get<ApiFootballResponse<FixtureResponse>>("/football/fixtures", {
-                params
-            });
-            return data.response;
+      const { data } = await api.get<ApiFootballResponse<OddResponse>>(
+        '/football/odds/live',
+        {
+          params,
         },
-        refetchInterval: 15000,
-    });
-};
+      );
+      return data.response;
+    },
+    refetchInterval: enabled ? 5000 : false,
+    enabled,
+  });
 
-export const useLiveOdds = (leagueId?: number) => {
-    return useQuery({
-        queryKey: ["odds", "live", leagueId],
-        queryFn: async () => {
-            const params: Record<string, number> = {};
-            if (leagueId) params.league = leagueId;
+export const useLiveMatches = (options?: { enabled?: boolean }) => {
+  const enabled = options?.enabled ?? true;
+  const { data: fixtures, isLoading: isFixturesLoading } = useLiveFixtures(undefined, enabled);
+  const { data: odds, isLoading: isOddsLoading } = useLiveOdds(undefined, enabled);
 
-            const { data } = await api.get<ApiFootballResponse<OddResponse>>("/football/odds/live", {
-                params
-            });
-            return data.response;
-        },
-        refetchInterval: 5000,
-    });
-};
+  const mergedData =
+    fixtures?.map((fixtureItem) => {
+      const fixtureId = fixtureItem.fixture.id;
+      const liveOddsItem = odds?.find((o) => o?.fixture?.id === fixtureId);
 
-export const useLiveMatches = () => {
-    // This hook combines live fixtures with live odds for a rich dashboard
-    const { data: fixtures, isLoading: isFixturesLoading } = useLiveFixtures();
-    const { data: odds, isLoading: isOddsLoading } = useLiveOdds();
+      let formattedOdds: Fixture['odds'] = { ...EMPTY_ODDS };
+      let markets: FixtureMarket[] = [];
 
-    const mergedData = fixtures?.map((fixtureItem) => {
-        const fixtureId = fixtureItem.fixture.id;
-        const liveOddsItem = odds?.find((o) => o?.fixture?.id === fixtureId);
+      if (liveOddsItem && liveOddsItem.bookmakers && liveOddsItem.bookmakers.length > 0) {
+        const extracted = extractOddsFromBookmaker(liveOddsItem.bookmakers[0]);
+        formattedOdds = extracted.summary;
+        markets = extracted.markets;
+      }
 
-        // Extract odds if available from the live odds response.
-        let formattedOdds: {
-            home: string;
-            draw: string;
-            away: string;
-            doubleChance?: { homeDraw: string; homeAway: string; drawAway: string };
-        } = { home: "1.00", draw: "1.00", away: "1.00" };
-
-        if (liveOddsItem && liveOddsItem.bookmakers && liveOddsItem.bookmakers.length > 0) {
-            const matchWinner = liveOddsItem.bookmakers[0].bets?.find((b: { id: number; name: string }) => b.id === 1 || b.name === "Match Winner");
-            if (matchWinner) {
-                formattedOdds = {
-                    home: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Home")?.odd || "1.00",
-                    draw: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Draw")?.odd || "1.00",
-                    away: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Away")?.odd || "1.00",
-                };
-            }
-
-            const doubleChance = liveOddsItem.bookmakers[0].bets?.find((b: { id: number; name: string }) => b.id === 12 || b.name === "Double Chance");
-            if (doubleChance) {
-                formattedOdds = {
-                    ...formattedOdds,
-                    doubleChance: {
-                        homeDraw: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Home/Draw")?.odd || "1.00",
-                        homeAway: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Home/Away")?.odd || "1.00",
-                        drawAway: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Draw/Away")?.odd || "1.00",
-                    }
-                };
-            }
-        }
-
-        return {
-            ...fixtureItem,
-            odds: formattedOdds
-        };
+      return {
+        ...fixtureItem,
+        odds: formattedOdds,
+        markets,
+      };
     }) || [];
 
-    return {
-        data: mergedData,
-        isLoading: isFixturesLoading || isOddsLoading
-    };
+  return {
+    data: mergedData,
+    isLoading: isFixturesLoading || isOddsLoading,
+  };
 };

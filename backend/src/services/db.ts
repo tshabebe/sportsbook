@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   bets,
@@ -14,12 +14,22 @@ import {
   type DbBetSelectionSelect,
 } from '../db/schema/betSelections';
 import {
+  retailers,
+  retailersSelectSchema,
   type DbRetailerSelect,
 } from '../db/schema/retailers';
 import {
+  retailTickets,
+  retailTicketsInsertSchema,
+  retailTicketsSelectSchema,
+  retailTicketsUpdateSchema,
   type DbRetailTicketSelect,
 } from '../db/schema/retailTickets';
-import type { DbRetailTicketEventInsert } from '../db/schema/retailTicketEvents';
+import {
+  retailTicketEvents,
+  retailTicketEventsInsertSchema,
+  type DbRetailTicketEventInsert,
+} from '../db/schema/retailTicketEvents';
 import type { ApiBetSlipInput } from '../validation/bets';
 
 export const createBetWithSelections = async (
@@ -60,35 +70,6 @@ export const createBetWithSelections = async (
 
 type DbBetWithSelections = DbBetSelect & { selections: DbBetSelectionSelect[] };
 type DbRetailTicketWithBet = DbRetailTicketSelect & { bet: DbBetWithSelections };
-type RetailersModule = typeof import('../db/schema/retailers');
-type RetailTicketsModule = typeof import('../db/schema/retailTickets');
-type RetailTicketEventsModule = typeof import('../db/schema/retailTicketEvents');
-
-const getRetailSchema = (): {
-  retailers: RetailersModule['retailers'];
-  retailersSelectSchema: RetailersModule['retailersSelectSchema'];
-  retailTickets: RetailTicketsModule['retailTickets'];
-  retailTicketsInsertSchema: RetailTicketsModule['retailTicketsInsertSchema'];
-  retailTicketsSelectSchema: RetailTicketsModule['retailTicketsSelectSchema'];
-  retailTicketsUpdateSchema: RetailTicketsModule['retailTicketsUpdateSchema'];
-  retailTicketEvents: RetailTicketEventsModule['retailTicketEvents'];
-  retailTicketEventsInsertSchema: RetailTicketEventsModule['retailTicketEventsInsertSchema'];
-} => {
-  const retailersModule = require('../db/schema/retailers') as RetailersModule;
-  const retailTicketsModule = require('../db/schema/retailTickets') as RetailTicketsModule;
-  const retailTicketEventsModule = require('../db/schema/retailTicketEvents') as RetailTicketEventsModule;
-
-  return {
-    retailers: retailersModule.retailers,
-    retailersSelectSchema: retailersModule.retailersSelectSchema,
-    retailTickets: retailTicketsModule.retailTickets,
-    retailTicketsInsertSchema: retailTicketsModule.retailTicketsInsertSchema,
-    retailTicketsSelectSchema: retailTicketsModule.retailTicketsSelectSchema,
-    retailTicketsUpdateSchema: retailTicketsModule.retailTicketsUpdateSchema,
-    retailTicketEvents: retailTicketEventsModule.retailTicketEvents,
-    retailTicketEventsInsertSchema: retailTicketEventsModule.retailTicketEventsInsertSchema,
-  };
-};
 
 export const listBetsWithSelections = async () => {
   const betRows = await db.select().from(bets).orderBy(desc(bets.id));
@@ -207,7 +188,6 @@ const appendRetailTicketEvent = async (input: {
   actorId?: string | null;
   payloadJson?: unknown;
 }) => {
-  const { retailTicketEventsInsertSchema, retailTicketEvents } = getRetailSchema();
   const eventRow: DbRetailTicketEventInsert = retailTicketEventsInsertSchema.parse({
     ticketId: input.ticketId,
     eventType: input.eventType,
@@ -221,7 +201,6 @@ const appendRetailTicketEvent = async (input: {
 export const findRetailerByUsername = async (
   username: string,
 ): Promise<DbRetailerSelect | null> => {
-  const { retailers, retailersSelectSchema } = getRetailSchema();
   const [row] = await db
     .select()
     .from(retailers)
@@ -236,7 +215,6 @@ export const createRetailTicketForBet = async (input: {
   betId: number;
   expiresAt?: Date | null;
 }) => {
-  const { retailTickets, retailTicketsInsertSchema, retailTicketsSelectSchema } = getRetailSchema();
   const ticketRow = retailTicketsInsertSchema.parse({
     ticketId: input.ticketId,
     betId: input.betId,
@@ -257,7 +235,6 @@ export const createRetailTicketForBet = async (input: {
 export const getRetailTicketByTicketId = async (
   ticketId: string,
 ): Promise<DbRetailTicketWithBet | null> => {
-  const { retailTickets, retailTicketsSelectSchema } = getRetailSchema();
   const [ticket] = await db
     .select()
     .from(retailTickets)
@@ -271,8 +248,35 @@ export const getRetailTicketByTicketId = async (
   return { ...parsedTicket, bet };
 };
 
+export const listRetailTicketsByBatchId = async (
+  batchId: string,
+): Promise<DbRetailTicketWithBet[]> => {
+  const rows = await db
+    .select()
+    .from(retailTickets)
+    .where(
+      or(
+        eq(retailTickets.ticketId, batchId),
+        like(retailTickets.ticketId, `${batchId}-%`),
+      ),
+    )
+    .orderBy(asc(retailTickets.id));
+
+  const tickets = await Promise.all(
+    rows.map(async (row) => {
+      const parsedTicket = retailTicketsSelectSchema.parse(row);
+      const bet = await getBetWithSelections(parsedTicket.betId);
+      if (!bet) return null;
+      return { ...parsedTicket, bet };
+    }),
+  );
+
+  return tickets.filter(
+    (ticket): ticket is DbRetailTicketWithBet => ticket !== null,
+  );
+};
+
 export const claimRetailTicket = async (ticketId: string, retailerId: number) => {
-  const { retailTickets, retailTicketsUpdateSchema, retailTicketsSelectSchema } = getRetailSchema();
   const [updated] = await db
     .update(retailTickets)
     .set(
@@ -313,7 +317,6 @@ export const listRetailTicketsByRetailer = async (
     | 'void'
     | 'expired',
 ) => {
-  const { retailTickets, retailTicketsSelectSchema } = getRetailSchema();
   const rows = await db
     .select()
     .from(retailTickets)
@@ -332,7 +335,6 @@ export const payoutRetailTicket = async (input: {
   retailerId: number;
   payoutReference: string;
 }) => {
-  const { retailTickets, retailTicketsUpdateSchema, retailTicketsSelectSchema } = getRetailSchema();
   const existing = await getRetailTicketByTicketId(input.ticketId);
   if (!existing) return { code: 'NOT_FOUND' as const };
   if (existing.status === 'paid') {
@@ -384,7 +386,6 @@ export const settleRetailTicketByBet = async (input: {
   result: 'won' | 'lost' | 'void';
   payout?: number | null;
 }) => {
-  const { retailTickets, retailTicketsUpdateSchema, retailTicketsSelectSchema } = getRetailSchema();
   const [ticketRow] = await db
     .select()
     .from(retailTickets)

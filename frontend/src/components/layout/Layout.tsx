@@ -1,7 +1,5 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
-import { MobileHeader } from "./MobileHeader";
 import { BottomNav } from "./BottomNav";
 import { Betslip } from "../Betslip";
 import { useState } from "react";
@@ -13,12 +11,6 @@ export function Layout() {
 
     return (
         <div className="flex flex-col h-screen bg-app-bg text-text-contrast font-poppins">
-            {/* Header: Desktop vs Mobile */}
-            <div className="hidden md:block">
-                <Header />
-            </div>
-            <MobileHeader />
-
             <div className="flex flex-1 overflow-hidden">
 
                 {/* Sidebar: Desktop Only */}

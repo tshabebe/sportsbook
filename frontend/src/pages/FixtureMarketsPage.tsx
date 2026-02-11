@@ -216,7 +216,11 @@ export function FixtureMarketsPage() {
   return (
     <div className="mx-auto w-full max-w-[980px] space-y-4 pb-20">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-subtle bg-app-bg/95 px-1 py-2 backdrop-blur">
-        <button onClick={() => navigate(-1)} className="rounded-md p-1.5 hover:bg-element-hover-bg">
+        <button
+          data-testid="fixture-back-button"
+          onClick={() => navigate(-1)}
+          className="rounded-md p-1.5 hover:bg-element-hover-bg"
+        >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0">
