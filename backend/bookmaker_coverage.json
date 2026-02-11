@@ -1,0 +1,127 @@
+{
+    "generated_at": "2026-02-11T09:30:00Z",
+    "note": "All bookmakers have identical odds coverage per league - the difference is in odds VALUES, not fixture coverage",
+    "bookmakers": [
+        {
+            "id": 1,
+            "name": "10Bet"
+        },
+        {
+            "id": 2,
+            "name": "Marathonbet"
+        },
+        {
+            "id": 3,
+            "name": "Betfair"
+        },
+        {
+            "id": 4,
+            "name": "Pinnacle"
+        },
+        {
+            "id": 5,
+            "name": "SBO"
+        },
+        {
+            "id": 6,
+            "name": "Bwin"
+        },
+        {
+            "id": 7,
+            "name": "William Hill"
+        },
+        {
+            "id": 8,
+            "name": "Bet365"
+        },
+        {
+            "id": 9,
+            "name": "Dafabet"
+        },
+        {
+            "id": 10,
+            "name": "Ladbrokes"
+        },
+        {
+            "id": 11,
+            "name": "1xBet"
+        },
+        {
+            "id": 12,
+            "name": "BetFred"
+        },
+        {
+            "id": 16,
+            "name": "Unibet"
+        },
+        {
+            "id": 21,
+            "name": "888Sport"
+        }
+    ],
+    "supported_leagues": [
+        {
+            "id": 39,
+            "name": "Premier League",
+            "country": "England",
+            "future_odds": 17
+        },
+        {
+            "id": 2,
+            "name": "Champions League",
+            "country": "World",
+            "future_odds": 8
+        },
+        {
+            "id": 40,
+            "name": "Championship",
+            "country": "England",
+            "future_odds": 8
+        },
+        {
+            "id": 135,
+            "name": "Serie A",
+            "country": "Italy",
+            "future_odds": 20
+        },
+        {
+            "id": 140,
+            "name": "La Liga",
+            "country": "Spain",
+            "future_odds": 20
+        },
+        {
+            "id": 78,
+            "name": "Bundesliga",
+            "country": "Germany",
+            "future_odds": 18
+        },
+        {
+            "id": 61,
+            "name": "Ligue 1",
+            "country": "France",
+            "future_odds": 18
+        },
+        {
+            "id": 88,
+            "name": "Eredivisie",
+            "country": "Netherlands",
+            "future_odds": 20
+        },
+        {
+            "id": 45,
+            "name": "FA Cup",
+            "country": "England",
+            "future_odds": 16
+        }
+    ],
+    "key_findings": [
+        "All bookmakers return the SAME fixture coverage - the API stores fixtures with odds, not odds per bookmaker separately",
+        "Bookmaker filter only affects which bookmaker's odds VALUES you see, not which fixtures are returned"
+    ],
+    "recommendation": {
+        "primary_bookmaker": "Bet365",
+        "bookmaker_id": 8,
+        "reason": "Most recognized brand, same coverage as others"
+    }
+}

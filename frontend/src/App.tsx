@@ -18,21 +18,6 @@ const RetailDashboardPage = lazy(() =>
 const TicketTrackerPage = lazy(() =>
   import("./pages/play/TicketTrackerPage").then((m) => ({ default: m.TicketTrackerPage })),
 );
-const PlayVariant1Page = lazy(() =>
-  import("./pages/play/PlayVariant1Page").then((m) => ({ default: m.PlayVariant1Page })),
-);
-const PlayVariant2Page = lazy(() =>
-  import("./pages/play/PlayVariant2Page").then((m) => ({ default: m.PlayVariant2Page })),
-);
-const PlayVariant3Page = lazy(() =>
-  import("./pages/play/PlayVariant3Page").then((m) => ({ default: m.PlayVariant3Page })),
-);
-const PlayVariant4Page = lazy(() =>
-  import("./pages/play/PlayVariant4Page").then((m) => ({ default: m.PlayVariant4Page })),
-);
-const PlayVariant5Page = lazy(() =>
-  import("./pages/play/PlayVariant5Page").then((m) => ({ default: m.PlayVariant5Page })),
-);
 
 function RetailGuard() {
   const token = getRetailToken();
@@ -59,11 +44,6 @@ function App() {
           <Route path="betslip" element={<BetSlipPage />} />
           <Route path="fixture/:fixtureId" element={<FixtureMarketsPage />} />
           <Route path="track" element={<TicketTrackerPage />} />
-          <Route path="1" element={<PlayVariant1Page />} />
-          <Route path="2" element={<PlayVariant2Page />} />
-          <Route path="3" element={<PlayVariant3Page />} />
-          <Route path="4" element={<PlayVariant4Page />} />
-          <Route path="5" element={<PlayVariant5Page />} />
         </Route>
 
         <Route path="/retail/login" element={<RetailLoginPage />} />

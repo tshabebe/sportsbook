@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import type { FixtureResponse, OddResponse, ApiFootballResponse } from "../types/football";
 import { compareIsoAsc, isPastIso } from "../lib/date";
+import { getCurrentSeason } from "../lib/seasons";
+
 
 type LeagueResponseItem = {
     seasons?: Array<{ current: boolean; year: number }>;
@@ -42,15 +44,23 @@ export const useFixturesSchedule = (leagueId: number, status: string = "NS", nex
 // Fetches odds with pagination → extracts fixture IDs → bulk fetches fixtures
 // This is more efficient than N+1 calls (2-4 calls vs 31+ calls)
 // Helper: Fetch fixtures for a single league using Option B (Odds-First)
-const fetchFixturesForLeague = async (leagueId: number) => {
-    // 1. Get current season dynamically
-    const { data: leagueData } = await api.get<ApiFootballResponse<LeagueResponseItem>>("/football/leagues", {
-        params: { id: leagueId, current: true }
-    });
+const fetchFixturesForLeague = async (leagueId: number, season?: number) => {
+    let currentSeason = season;
 
-    const currentSeason = leagueData.response?.[0]?.seasons?.find(
-        (s: { current: boolean }) => s.current
-    )?.year;
+    // 1. Get current season dynamically if not provided
+    if (!currentSeason) {
+        try {
+            const { data: leagueData } = await api.get<ApiFootballResponse<LeagueResponseItem>>("/football/leagues", {
+                params: { id: leagueId, current: true }
+            });
+
+            currentSeason = leagueData.response?.[0]?.seasons?.find(
+                (s: { current: boolean }) => s.current
+            )?.year;
+        } catch (e) {
+            console.error(`Failed to fetch season for league ${leagueId}`, e);
+        }
+    }
 
     if (!currentSeason) {
         console.warn("Could not determine current season for league", leagueId);
@@ -58,6 +68,7 @@ const fetchFixturesForLeague = async (leagueId: number) => {
     }
 
     // 2. Fetch ALL pages of odds (Bet365 only, bookmaker=8)
+
     const allOddsResponses: OddResponse[] = [];
     let currentPage = 1;
     let totalPages = 1;
@@ -163,11 +174,14 @@ export const usePreMatchFixtures = (leagueId: number | null | 0) => {
             }
 
             // If "All Leagues" (0 or null) -> Fetch multiple supported leagues in parallel
-            // Supported: PL(39), Champ(40), Serie A(135), La Liga(140), Bundesliga(78), Ligue 1(61), Eredivisie(88)
-            const TARGET_LEAGUES = [39, 40, 135, 140, 78, 61, 88];
+            // Supported: PL(39), Champ(40), Serie A(135), La Liga(140), Bundesliga(78), Ligue 1(61), Eredivisie(88), FA Cup(45)
+            const TARGET_LEAGUES = [39, 2, 40, 135, 140, 78, 61, 88, 45];
+
+            // Optimization: Calculate season client-side once
+            const currentSeason = getCurrentSeason();
 
             const results = await Promise.all(
-                TARGET_LEAGUES.map(id => fetchFixturesForLeague(id))
+                TARGET_LEAGUES.map(id => fetchFixturesForLeague(id, currentSeason))
             );
 
             // Flatten and sort by date

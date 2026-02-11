@@ -15,29 +15,8 @@ const handleProxy = (path: string) =>
 
 // --- Custom Optimized Routes ---
 
-router.get(
-  '/leagues/popular',
-  asyncHandler(async (_req: Request, res: Response) => {
-    // Optimized: Use hardcoded IDs to avoid 12 parallel API search calls (Rate Limit protection)
-    const leagues = [
-      { id: 39, name: 'Premier League', country: 'England', logo: 'https://media.api-sports.io/football/leagues/39.png', type: 'League' },
-      { id: 2, name: 'UEFA Champions League', country: 'World', logo: 'https://media.api-sports.io/football/leagues/2.png', type: 'Cup' },
-      { id: 140, name: 'La Liga', country: 'Spain', logo: 'https://media.api-sports.io/football/leagues/140.png', type: 'League' },
-      { id: 135, name: 'Serie A', country: 'Italy', logo: 'https://media.api-sports.io/football/leagues/135.png', type: 'League' },
-      { id: 78, name: 'Bundesliga', country: 'Germany', logo: 'https://media.api-sports.io/football/leagues/78.png', type: 'League' },
-      { id: 61, name: 'Ligue 1', country: 'France', logo: 'https://media.api-sports.io/football/leagues/61.png', type: 'League' },
-      { id: 3, name: 'UEFA Europa League', country: 'World', logo: 'https://media.api-sports.io/football/leagues/3.png', type: 'Cup' },
-      { id: 848, name: 'UEFA Europa Conference League', country: 'World', logo: 'https://media.api-sports.io/football/leagues/848.png', type: 'Cup' },
-      { id: 45, name: 'FA Cup', country: 'England', logo: 'https://media.api-sports.io/football/leagues/45.png', type: 'Cup' },
-      { id: 13, name: 'Copa Libertadores', country: 'World', logo: 'https://media.api-sports.io/football/leagues/13.png', type: 'Cup' },
-      { id: 88, name: 'Eredivisie', country: 'Netherlands', logo: 'https://media.api-sports.io/football/leagues/88.png', type: 'League' },
-      { id: 40, name: 'Championship', country: 'England', logo: 'https://media.api-sports.io/football/leagues/40.png', type: 'League' },
-    ];
-    res.json({ ok: true, leagues });
-  }),
-);
-
 // --- Proxy Routes (Mapped 1:1 to API-Football) ---
+
 
 router.get('/status', handleProxy('/status'));
 

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { LEAGUES } from '../../data/leagues';
@@ -96,6 +97,174 @@ export function Sidebar() {
             </button>
           );
         })}
+=======
+import { useState, useMemo } from 'react';
+import { Search, Trophy, ChevronDown } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { useLeagues } from '../../hooks/useLeagues';
+import { usePreMatchFixtures } from '../../hooks/useFootball';
+
+const INITIAL_VISIBLE = 10;
+
+export function Sidebar() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAll, setShowAll] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const selectedLeagueId = Number(searchParams.get('league') || 0);
+
+  const { data: leagues = [], isLoading: isLoadingLeagues } = useLeagues();
+  const { data: allFixtures = [] } = usePreMatchFixtures(0);
+
+  // Compute bettable count per league from cached fixture data
+  const leaguesWithCounts = useMemo(() => {
+    return leagues.map((league) => {
+      const count = allFixtures.filter((f) => f.league.id === league.id).length;
+      return { ...league, count };
+    });
+  }, [leagues, allFixtures]);
+
+  // Filter by search
+  const filteredLeagues = useMemo(() => {
+    if (!searchQuery.trim()) return leaguesWithCounts;
+    const q = searchQuery.toLowerCase();
+    return leaguesWithCounts.filter(
+      (l) =>
+        l.name.toLowerCase().includes(q) ||
+        l.country.toLowerCase().includes(q),
+    );
+  }, [leaguesWithCounts, searchQuery]);
+
+  // Limit visible
+  const visibleLeagues = showAll
+    ? filteredLeagues
+    : filteredLeagues.slice(0, INITIAL_VISIBLE);
+
+  const hasMore = filteredLeagues.length > INITIAL_VISIBLE;
+  const totalBettable = useMemo(
+    () => leaguesWithCounts.reduce((sum, l) => sum + l.count, 0),
+    [leaguesWithCounts],
+  );
+
+  const handleLeagueClick = (leagueId: number) => {
+    if (leagueId === 0) {
+      searchParams.delete('league');
+    } else {
+      searchParams.set('league', String(leagueId));
+    }
+    setSearchParams(searchParams, { replace: true });
+  };
+
+  return (
+    <aside className="hidden h-full w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-element-bg md:flex">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-border-subtle px-4 py-3">
+        <Trophy size={16} className="text-accent-solid" />
+        <span className="text-sm font-semibold text-text-contrast">Leagues</span>
+      </div>
+
+      {/* Search */}
+      <div className="px-3 py-2">
+        <div className="flex items-center gap-2 rounded-lg bg-app-bg px-3 py-2">
+          <Search size={14} className="text-text-muted" />
+          <input
+            type="text"
+            placeholder="Search leagues..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-transparent text-xs text-text-contrast placeholder:text-text-muted outline-none"
+          />
+        </div>
+      </div>
+
+      {/* All Leagues item */}
+      <button
+        type="button"
+        onClick={() => handleLeagueClick(0)}
+        className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors ${selectedLeagueId === 0
+            ? 'bg-accent-solid/10 text-accent-solid font-semibold'
+            : 'text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
+          }`}
+      >
+        <span className="flex items-center gap-3">
+          <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">⚽</span>
+          All Leagues
+        </span>
+        {totalBettable > 0 && (
+          <span className="rounded-full bg-accent-solid/20 px-2 py-0.5 text-[10px] font-semibold text-accent-solid">
+            {totalBettable}
+          </span>
+        )}
+      </button>
+
+      {/* League list */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoadingLeagues ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="h-5 w-5 animate-spin rounded-full border-b-2 border-accent-solid" />
+          </div>
+        ) : (
+          <>
+            {visibleLeagues.map((league) => (
+              <button
+                key={league.id}
+                type="button"
+                onClick={() => handleLeagueClick(league.id)}
+                className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${selectedLeagueId === league.id
+                    ? 'bg-accent-solid/10 text-accent-solid font-semibold'
+                    : 'text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
+                  }`}
+              >
+                <span className="flex items-center gap-3">
+                  <img
+                    src={league.logo}
+                    alt={league.name}
+                    className="h-5 w-5 object-contain"
+                  />
+                  <span className="truncate">{league.name}</span>
+                </span>
+                {league.count > 0 && (
+                  <span className="rounded-full bg-app-bg px-2 py-0.5 text-[10px] font-semibold text-text-muted">
+                    {league.count}
+                  </span>
+                )}
+              </button>
+            ))}
+
+            {/* Show More / Show Less */}
+            {hasMore && !searchQuery && (
+              <button
+                type="button"
+                onClick={() => setShowAll(!showAll)}
+                className="flex w-full items-center justify-center gap-1 px-4 py-2.5 text-xs text-accent-solid transition-colors hover:text-accent-solid/80"
+              >
+                <span>{showAll ? 'Show Less' : `Show More (${filteredLeagues.length - INITIAL_VISIBLE})`}</span>
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform duration-200 ${showAll ? 'rotate-180' : ''}`}
+                />
+              </button>
+            )}
+
+            {filteredLeagues.length === 0 && searchQuery && (
+              <div className="px-4 py-6 text-center text-xs text-text-muted">
+                No leagues match &ldquo;{searchQuery}&rdquo;
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Track Ticket link */}
+      <div className="border-t border-border-subtle px-4 py-3">
+        <a
+          href="/play/track"
+          className="flex items-center gap-2 text-xs text-text-muted transition-colors hover:text-text-contrast"
+        >
+          <Search size={12} />
+          Track Ticket
+        </a>
+>>>>>>> 01900a5e7184b373bc4e183dbc08d884bcb7bf24
       </div>
     </aside>
   );

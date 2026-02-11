@@ -9,6 +9,7 @@ import {
   Button as AriaButton,
 } from 'react-aria-components';
 import dayjs from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import { Leaderboard } from '../components/Leaderboard';
 import { usePreMatchFixtures, useLiveMatches, type Fixture } from '../hooks/useFootball';
 import { LeagueGroup } from '../components/LeagueGroup';
@@ -20,6 +21,7 @@ import type { ApiFootballResponse } from '../types/football';
 type ViewTab = 'prematch' | 'live';
 type DateFilter = 'all' | 'today' | 'tomorrow' | 'next7d';
 
+<<<<<<< HEAD
 const SoccerIcon = () => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
@@ -49,6 +51,15 @@ export function HomePage() {
     }
     setSearchParams(nextParams, { replace: true });
   };
+=======
+export function HomePage() {
+  const [activeTab, setActiveTab] = useState<ViewTab>('prematch');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+  const [searchParams] = useSearchParams();
+
+  // Read league from URL (set by sidebar)
+  const selectedLeagueId = Number(searchParams.get('league') || 0);
+>>>>>>> 01900a5e7184b373bc4e183dbc08d884bcb7bf24
 
   const { data: preMatchFixtures, isLoading: isLoadingPre, error: errorPre } = usePreMatchFixtures(selectedLeagueId);
   const { data: liveFixtures, isLoading: isLoadingLive } = useLiveMatches();
@@ -107,6 +118,7 @@ export function HomePage() {
     staleTime: 60 * 60 * 1000,
   });
 
+<<<<<<< HEAD
   const leagueAssetsFromApiById = useMemo(() => {
     const items = leagueAssetsResponse || [];
     return items.reduce((acc, item) => {
@@ -243,6 +255,26 @@ export function HomePage() {
               </button>
             ))}
           </div>
+=======
+      <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('prematch')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${activeTab === 'prematch' ? 'bg-[#ffd60a] text-[#1d1d1d]' : 'bg-[#2a2a2a] text-[#c8c8c8]'
+              }`}
+          >
+            Pre-Match
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('live')}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${activeTab === 'live' ? 'bg-[#ffd60a] text-[#1d1d1d]' : 'bg-[#2a2a2a] text-[#c8c8c8]'
+              }`}
+          >
+            Live
+          </button>
+>>>>>>> 01900a5e7184b373bc4e183dbc08d884bcb7bf24
         </div>
       </div>
 
