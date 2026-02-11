@@ -18,13 +18,14 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "redis": "^4.7.0",
     "drizzle-orm": "^0.44.3",
-    "@neondatabase/serverless": "^1.0.1",
     "drizzle-zod": "^0.8.1",
+    "express": "^5.2.1",
+    "postgres": "^3.4.8",
+    "redis": "^4.7.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

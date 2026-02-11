@@ -138,7 +138,7 @@ export function FixtureMarketsPage() {
   const { fixtureId } = useParams<{ fixtureId: string }>();
   const navigate = useNavigate();
   const { addToBetSlip, bets } = useBetSlip();
-  const [activeCategory, setActiveCategory] = useState<MarketCategoryKey>('all');
+  const [activeCategory, setActiveCategory] = useState<MarketCategoryKey>('main');
   const [openMarkets, setOpenMarkets] = useState<Record<string, boolean>>({});
 
   const { data: fixtureDetails, isLoading: isLoadingFixture } = useQuery({
@@ -294,6 +294,8 @@ export function FixtureMarketsPage() {
                         marketName: market.name,
                         selectionName: `${outcome.value}${outcome.handicap ? ` ${outcome.handicap}` : ''}`,
                         odds: Number(outcome.odd),
+                        leagueName: league.name,
+                        fixtureDate: fixture.date,
                       });
                     }}
                   />

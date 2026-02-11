@@ -9,6 +9,9 @@ export interface Bet extends BetSelectionInput {
     selectionName: string; // e.g., "Team A"
     odds: number;
     stake?: number;
+    leagueName?: string;
+    leagueCountry?: string;
+    fixtureDate?: string;
 }
 
 interface BetSlipStore {

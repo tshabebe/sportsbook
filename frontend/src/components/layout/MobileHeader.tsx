@@ -8,6 +8,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { useWalletProfile } from '../../hooks/useWallet';
+import { formatCurrency } from '../../config/currency';
+import logo from '../../assets/logo.png';
 
 export function MobileHeader() {
   const { data } = useWalletProfile();
@@ -27,11 +29,11 @@ export function MobileHeader() {
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <Menu size={20} className="text-text-contrast" />
-          <span className="text-xl font-bold text-text-contrast">classicBet</span>
+          <img src={logo} alt="Logo" className="h-22 w-auto object-contain" />
         </div>
 
         <div className="flex items-center gap-2 rounded-lg bg-element-hover-bg p-1 pl-2">
-          <span className="text-xs font-medium text-text-contrast">€{(data?.balance ?? 0).toFixed(2)}</span>
+          <span className="text-xs font-medium text-text-contrast">{formatCurrency(data?.balance ?? 0)}</span>
           <Button variant="solid" size="sm" className="h-6 w-6 !px-0 rounded-md" aria-label="Top up">
             <span className="text-lg leading-none">+</span>
           </Button>

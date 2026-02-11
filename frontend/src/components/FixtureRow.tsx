@@ -1,13 +1,22 @@
 import { useNavigate } from 'react-router-dom';
 import type { Fixture } from '../hooks/useFootball';
-import { formatFixtureDate, formatFixtureTime } from '../lib/date';
+import { formatFixtureTime } from '../lib/date';
 import { useBetSlip } from '../context/BetSlipContext';
+
+type MarketView = '1x2' | 'double_chance';
+
+type DoubleChanceOdds = {
+    homeDraw: string;
+    homeAway: string;
+    drawAway: string;
+};
 
 interface FixtureRowProps {
     fixture: Fixture;
+    marketView?: MarketView;
 }
 
-export function FixtureRow({ fixture }: FixtureRowProps) {
+export function FixtureRow({ fixture, marketView = '1x2' }: FixtureRowProps) {
     const navigate = useNavigate();
     const { addToBetSlip, bets } = useBetSlip();
 
@@ -15,54 +24,97 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
     const homeOdd = fixture.odds?.home;
     const drawOdd = fixture.odds?.draw;
     const awayOdd = fixture.odds?.away;
+    const doubleChanceOdds = (fixture.odds as any)?.doubleChance as DoubleChanceOdds | undefined;
 
     const handleRowClick = () => {
         navigate(`/play/fixture/${fixture.fixture.id}`);
     };
 
-    const handleOddClick = (e: React.MouseEvent, selection: 'Home' | 'Draw' | 'Away') => {
+    const handleOddClick = (e: React.MouseEvent, betId: number, selection: string, selectionName: string, rawOdd: string | number | undefined, marketName: string) => {
         e.stopPropagation();
-        const rawOdd =
-            selection === 'Home'
-                ? homeOdd
-                : selection === 'Draw'
-                    ? drawOdd
-                    : awayOdd;
         const parsedOdd = Number(rawOdd);
         if (!Number.isFinite(parsedOdd) || parsedOdd <= 1) return;
 
-        const selectionId = `${fixture.fixture.id}-mw-1-${selection}`;
+        const selectionId = `${fixture.fixture.id}-mw-${betId}-${selection}`;
 
         addToBetSlip({
             id: selectionId,
             fixtureId: fixture.fixture.id,
-            betId: 1,
+            betId,
             value: selection,
             odd: parsedOdd,
             bookmakerId: 8,
             fixtureName: `${fixture.teams.home.name} vs ${fixture.teams.away.name}`,
-            marketName: 'Match Winner',
-            selectionName:
-                selection === 'Home'
-                    ? fixture.teams.home.name
-                    : selection === 'Draw'
-                        ? 'Draw'
-                        : fixture.teams.away.name,
+            marketName,
+            selectionName,
             odds: parsedOdd,
+            leagueName: fixture.league.name,
+            leagueCountry: fixture.league.country,
+            fixtureDate: fixture.fixture.date,
         });
     };
 
-    const isSelectionActive = (selection: 'Home' | 'Draw' | 'Away') =>
+    const isSelectionActive = (betId: number, selection: string) =>
         bets.some(
             (b) =>
                 b.fixtureId === fixture.fixture.id &&
-                String(b.betId) === '1' &&
+                String(b.betId) === String(betId) &&
                 b.value === selection,
         );
 
     const time = formatFixtureTime(fixture.fixture.date);
-    const displayDate = formatFixtureDate(fixture.fixture.date);
     const isLive = ['1H', 'HT', '2H', 'ET', 'P', 'LIVE'].includes(fixture.fixture.status.short);
+
+    const market =
+        marketView === 'double_chance'
+            ? {
+                betId: 12,
+                marketName: 'Double Chance',
+                rows: [
+                    {
+                        label: '1/X',
+                        selection: 'Home/Draw',
+                        selectionName: 'Home/Draw',
+                        odd: doubleChanceOdds?.homeDraw,
+                    },
+                    {
+                        label: '1/2',
+                        selection: 'Home/Away',
+                        selectionName: 'Home/Away',
+                        odd: doubleChanceOdds?.homeAway,
+                    },
+                    {
+                        label: 'X/2',
+                        selection: 'Draw/Away',
+                        selectionName: 'Draw/Away',
+                        odd: doubleChanceOdds?.drawAway,
+                    },
+                ],
+            }
+            : {
+                betId: 1,
+                marketName: 'Match Winner',
+                rows: [
+                    {
+                        label: '1',
+                        selection: 'Home',
+                        selectionName: fixture.teams.home.name,
+                        odd: homeOdd,
+                    },
+                    {
+                        label: 'X',
+                        selection: 'Draw',
+                        selectionName: 'Draw',
+                        odd: drawOdd,
+                    },
+                    {
+                        label: '2',
+                        selection: 'Away',
+                        selectionName: fixture.teams.away.name,
+                        odd: awayOdd,
+                    },
+                ],
+            };
 
     return (
         <div
@@ -104,9 +156,16 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
                 {/* 1x2 Odds */}
                 <div className="w-64 grid grid-cols-3 gap-2">
-                    <OddButton label="1" odd={homeOdd} isSelected={isSelectionActive('Home')} onClick={(e) => handleOddClick(e, 'Home')} />
-                    <OddButton label="X" odd={drawOdd} isSelected={isSelectionActive('Draw')} onClick={(e) => handleOddClick(e, 'Draw')} />
-                    <OddButton label="2" odd={awayOdd} isSelected={isSelectionActive('Away')} onClick={(e) => handleOddClick(e, 'Away')} />
+                    {market.rows.map((row) => (
+                        <OddButton
+                            key={row.label}
+                            label={row.label}
+                            odd={row.odd}
+                            showLabel={false}
+                            isSelected={isSelectionActive(market.betId, row.selection)}
+                            onClick={(e) => handleOddClick(e, market.betId, row.selection, row.selectionName, row.odd, market.marketName)}
+                        />
+                    ))}
                 </div>
 
                 {/* Plus Button for More Markets */}
@@ -124,44 +183,34 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 
             {/* Mobile Layout (< md) */}
             <div className="md:hidden flex flex-col w-full px-4 py-3 gap-3">
-                {/* Top Row: Time & Status */}
-                <div className="flex justify-between items-center text-[11px] text-[#c8c8c8]">
-                    <div className="flex items-center gap-2">
-                        {isLive ? (
-                            <span className="text-[#ff3939] font-bold">{fixture.fixture.status.elapsed}' • LIVE</span>
-                        ) : (
-                            <span>{time} • {displayDate}</span>
-                        )}
-                    </div>
-                    {/* League Name (Small Context) */}
-                    <span className="truncate max-w-[150px] opacity-70">{fixture.league.name}</span>
+                <div className="flex items-center justify-between text-[11px] text-[#c8c8c8]">
+                    <span className="flex items-center gap-2 font-semibold text-text-muted">
+                        <img src={fixture.league.flag ?? fixture.league.logo} alt={fixture.league.name} className="w-4 h-4 object-contain" />
+                        {fixture.league.name}
+                    </span>
+                    <span className="text-xs">{time}</span>
                 </div>
 
-                {/* Middle Row: Teams & Score */}
-                <div className="flex justify-between items-center">
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2">
-                            <img src={fixture.teams.home.logo} alt={fixture.teams.home.name} className="w-5 h-5 object-contain" />
-                            <span className="text-[#fafafa] text-[14px] font-medium">{fixture.teams.home.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <img src={fixture.teams.away.logo} alt={fixture.teams.away.name} className="w-5 h-5 object-contain" />
-                            <span className="text-[#fafafa] text-[14px] font-medium">{fixture.teams.away.name}</span>
-                        </div>
-                    </div>
-                    {(isLive || fixture.goals.home !== null) && (
-                        <div className="flex flex-col items-center justify-center gap-2 text-[#ffd60a] font-bold text-[14px]">
-                            <span>{fixture.goals.home ?? 0}</span>
-                            <span>{fixture.goals.away ?? 0}</span>
-                        </div>
-                    )}
+                <div className="flex items-center justify-center gap-3 text-[14px] font-semibold text-text-contrast">
+                    <span className="text-sm">{fixture.teams.home.name}</span>
+                    <img src={fixture.teams.home.logo} alt={fixture.teams.home.name} className="h-6 w-6 object-contain" />
+                    <span className="text-[11px] text-[#8bd2ff] font-medium">VS</span>
+                    <img src={fixture.teams.away.logo} alt={fixture.teams.away.name} className="h-6 w-6 object-contain" />
+                    <span className="text-sm">{fixture.teams.away.name}</span>
                 </div>
 
-                {/* Bottom Row: Odds */}
-                <div className="grid grid-cols-3 gap-2 mt-1">
-                    <OddButton label="1" subLabel={fixture.teams.home.name} odd={homeOdd} isSelected={isSelectionActive('Home')} onClick={(e) => handleOddClick(e, 'Home')} />
-                    <OddButton label="X" subLabel="Draw" odd={drawOdd} isSelected={isSelectionActive('Draw')} onClick={(e) => handleOddClick(e, 'Draw')} />
-                    <OddButton label="2" subLabel={fixture.teams.away.name} odd={awayOdd} isSelected={isSelectionActive('Away')} onClick={(e) => handleOddClick(e, 'Away')} />
+                <div className="text-[10px] font-semibold uppercase tracking-[0.4em] text-[#8bd2ff]">{marketView === 'double_chance' ? 'DOUBLE CHANCE' : '1x2'}</div>
+
+                <div className="grid grid-cols-3 gap-2">
+                    {market.rows.map((row) => (
+                        <OddButton
+                            key={row.label}
+                            label={row.label}
+                            odd={row.odd}
+                            isSelected={isSelectionActive(market.betId, row.selection)}
+                            onClick={(e) => handleOddClick(e, market.betId, row.selection, row.selectionName, row.odd, market.marketName)}
+                        />
+                    ))}
                 </div>
             </div>
         </div>
@@ -169,20 +218,22 @@ export function FixtureRow({ fixture }: FixtureRowProps) {
 }
 
 // Sub-component for Odds Button
-function OddButton({ label, subLabel, odd, isSelected, onClick }: { label: string, subLabel?: string, odd: string | number | undefined, isSelected?: boolean, onClick: (e: React.MouseEvent) => void }) {
+function OddButton({ label, subLabel, odd, showLabel = true, isSelected, onClick }: { label: string, subLabel?: string, odd: string | number | undefined, showLabel?: boolean, isSelected?: boolean, onClick: (e: React.MouseEvent) => void }) {
     const displayOdd = odd ? odd : '-';
 
     return (
         <button
             onClick={onClick}
-            className={`flex h-full w-full flex-col items-center justify-center rounded py-2 px-1 transition-colors group/btn ${
+            className={`flex h-full w-full flex-col items-center justify-center rounded border py-2 px-1 transition-colors group/btn ${
                 isSelected
-                    ? 'bg-[#ffd60a] text-[#1d1d1d]'
-                    : 'bg-[#282828] hover:bg-[#333] active:bg-[#ffd60a]/20'
+                    ? 'bg-[#ffd60a] border-[#ffd60a] text-[#1d1d1d]'
+                    : 'bg-[#3a3a3a] border-[#111] hover:bg-[#4a4a4a] active:bg-[#2b2b2b]'
             }`}
         >
-            <span className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-[#1d1d1d]/80' : 'text-[#c8c8c8]'}`}>{subLabel || label}</span>
-            <span className={`text-[13px] font-bold ${isSelected ? 'text-[#1d1d1d]' : 'text-[#ffd60a] group-hover/btn:text-[#ffe55c]'}`}>{displayOdd}</span>
+            {showLabel && (
+                <span className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-[#1d1d1d]/80' : 'text-[#e6e6e6]'}`}>{subLabel || label}</span>
+            )}
+            <span className={`text-[13px] font-bold ${isSelected ? 'text-[#1d1d1d]' : 'text-[#ffffff]'}`}>{displayOdd}</span>
         </button>
     );
 }

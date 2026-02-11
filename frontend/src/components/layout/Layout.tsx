@@ -13,10 +13,6 @@ export function Layout() {
 
     return (
         <div className="flex flex-col h-screen bg-app-bg text-text-contrast font-poppins">
-            <div className="border-b border-border-subtle bg-[#173126] px-4 py-1 text-center text-xs font-semibold text-[#8df6b0]">
-                PLAYER TICKET MODE
-            </div>
-
             {/* Header: Desktop vs Mobile */}
             <div className="hidden md:block">
                 <Header />

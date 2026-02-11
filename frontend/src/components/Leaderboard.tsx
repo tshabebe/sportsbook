@@ -11,6 +11,7 @@ import {
   Tabs,
 } from 'react-aria-components';
 import { Trophy } from 'lucide-react';
+import { formatCurrency } from '../config/currency';
 
 export interface LeaderboardEntry {
   id: string;
@@ -20,17 +21,18 @@ export interface LeaderboardEntry {
   amount: string;
 }
 
+const leaderboardAmount = formatCurrency(7500);
 const mockData: LeaderboardEntry[] = [
-  { id: '1', rank: 1, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '2', rank: 2, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '3', rank: 3, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '4', rank: 4, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '5', rank: 5, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '6', rank: 6, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '7', rank: 7, player: 'Player', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '8', rank: 8, player: 'Username', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '9', rank: 9, player: 'Username', numberOfWins: 27165, amount: '7,500.00€' },
-  { id: '10', rank: 10, player: 'Username', numberOfWins: 27165, amount: '7,500.00€' },
+  { id: '1', rank: 1, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '2', rank: 2, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '3', rank: 3, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '4', rank: 4, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '5', rank: 5, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '6', rank: 6, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '7', rank: 7, player: 'Player', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '8', rank: 8, player: 'Username', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '9', rank: 9, player: 'Username', numberOfWins: 27165, amount: leaderboardAmount },
+  { id: '10', rank: 10, player: 'Username', numberOfWins: 27165, amount: leaderboardAmount },
 ];
 
 export function Leaderboard() {

@@ -260,8 +260,13 @@ export const useLiveMatches = () => {
         const fixtureId = fixtureItem.fixture.id;
         const liveOddsItem = odds?.find((o) => o?.fixture?.id === fixtureId);
 
-        // Extract 1x2 odds if available from the live odds response.
-        let formattedOdds = { home: "1.00", draw: "1.00", away: "1.00" };
+        // Extract odds if available from the live odds response.
+        let formattedOdds: {
+            home: string;
+            draw: string;
+            away: string;
+            doubleChance?: { homeDraw: string; homeAway: string; drawAway: string };
+        } = { home: "1.00", draw: "1.00", away: "1.00" };
 
         if (liveOddsItem && liveOddsItem.bookmakers && liveOddsItem.bookmakers.length > 0) {
             const matchWinner = liveOddsItem.bookmakers[0].bets?.find((b: { id: number; name: string }) => b.id === 1 || b.name === "Match Winner");
@@ -270,6 +275,18 @@ export const useLiveMatches = () => {
                     home: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Home")?.odd || "1.00",
                     draw: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Draw")?.odd || "1.00",
                     away: matchWinner.values.find((v: { value: string; odd: string }) => v.value === "Away")?.odd || "1.00",
+                };
+            }
+
+            const doubleChance = liveOddsItem.bookmakers[0].bets?.find((b: { id: number; name: string }) => b.id === 12 || b.name === "Double Chance");
+            if (doubleChance) {
+                formattedOdds = {
+                    ...formattedOdds,
+                    doubleChance: {
+                        homeDraw: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Home/Draw")?.odd || "1.00",
+                        homeAway: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Home/Away")?.odd || "1.00",
+                        drawAway: doubleChance.values.find((v: { value: string; odd: string }) => v.value === "Draw/Away")?.odd || "1.00",
+                    }
                 };
             }
         }

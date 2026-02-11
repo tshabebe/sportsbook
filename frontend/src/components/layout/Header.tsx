@@ -8,6 +8,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { useWalletProfile } from '../../hooks/useWallet';
+import { formatCurrency } from '../../config/currency';
+import logo from '../../assets/logo.png';
 
 export function Header() {
   const { data } = useWalletProfile();
@@ -19,13 +21,11 @@ export function Header() {
         <Button variant="ghost" size="icon" aria-label="Main menu">
           <Menu size={20} />
         </Button>
-        <div className="flex items-center gap-1">
-          <span className="text-xl font-bold text-text-contrast">classicBet</span>
-        </div>
+        <img src={logo} alt="Logo" className="h-10 w-auto object-contain" />
       </div>
 
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-text-contrast">€{(data?.balance ?? 0).toFixed(2)}</span>
+        <span className="text-sm font-medium text-text-contrast">{formatCurrency(data?.balance ?? 0)}</span>
         <Button variant="solid" size="sm" className="h-8 w-8 !px-0 rounded-full" aria-label="Top up">
           <Plus size={18} />
         </Button>
