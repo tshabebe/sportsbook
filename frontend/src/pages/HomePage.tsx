@@ -73,9 +73,8 @@ export function HomePage() {
   const marketView = parseMarketView(marketParam);
 
   const queryLeagueId = Number(searchParams.get('league') ?? '0');
-  const selectedLeagueId = LEAGUES.some((league) => league.id === queryLeagueId)
-    ? queryLeagueId
-    : 0;
+  const selectedLeagueId =
+    Number.isFinite(queryLeagueId) && queryLeagueId > 0 ? queryLeagueId : 0;
 
   const shouldLoadAllLeagues = selectedLeagueId === 0;
   const allLeaguesQuery = useAllLeaguesPreMatchFixtures(shouldLoadAllLeagues);

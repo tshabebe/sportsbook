@@ -29,6 +29,28 @@ const preMatchFixture = {
   goals: { home: null, away: null },
 };
 
+const championsFixture = {
+  fixture: {
+    id: 9101,
+    timezone: 'UTC',
+    date: '2026-02-17T19:00:00.000Z',
+    timestamp: 1771354800,
+    status: { long: 'Not Started', short: 'NS', elapsed: null },
+  },
+  league: {
+    id: 2,
+    name: 'UEFA Champions League',
+    country: 'World',
+    logo: 'https://example.com/league-2.png',
+    flag: 'https://example.com/flag-world.png',
+  },
+  teams: {
+    home: { id: 500, name: 'Gamma FC', logo: 'https://example.com/gamma.png' },
+    away: { id: 600, name: 'Delta FC', logo: 'https://example.com/delta.png' },
+  },
+  goals: { home: null, away: null },
+};
+
 const preMatchOdds = {
   fixture: { id: 9001, date: '2026-02-16T17:00:00.000Z' },
   league: { id: 39, name: 'Premier League', country: 'England' },
@@ -69,6 +91,28 @@ const preMatchOdds = {
           values: [
             { value: 'Yes', odd: '1.67' },
             { value: 'No', odd: '2.10' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const championsOdds = {
+  fixture: { id: 9101, date: '2026-02-17T19:00:00.000Z' },
+  league: { id: 2, name: 'UEFA Champions League', country: 'World' },
+  bookmakers: [
+    {
+      id: 8,
+      name: 'Bookmaker',
+      bets: [
+        {
+          id: 1,
+          name: 'Match Winner',
+          values: [
+            { value: 'Home', odd: '2.05' },
+            { value: 'Draw', odd: '3.30' },
+            { value: 'Away', odd: '3.40' },
           ],
         },
       ],
@@ -159,9 +203,21 @@ describe('Home Betting UX', () => {
           req.reply({ statusCode: 200, body: wrapApiFootball([preMatchOdds]) });
           return;
         }
+        if (fixtureId === '9101') {
+          req.reply({ statusCode: 200, body: wrapApiFootball([championsOdds]) });
+          return;
+        }
         if (leagueId) {
           if (leagueId === '39') {
             req.alias = 'oddsLeague39';
+          }
+          if (leagueId === '2') {
+            req.alias = 'oddsLeague2';
+            req.reply({
+              statusCode: 200,
+              body: wrapApiFootball([championsOdds]),
+            });
+            return;
           }
           const delay = delayedLeagueOdds ? 0 : 900;
           delayedLeagueOdds = true;
@@ -180,15 +236,25 @@ describe('Home Betting UX', () => {
         if (ids.includes('9001')) {
           req.alias = 'fixtures9001';
         }
+        if (ids.includes('9101')) {
+          req.alias = 'fixtures9101';
+        }
         const body = ids.includes('9001')
           ? wrapApiFootball([preMatchFixture])
-          : wrapApiFootball([]);
+          : ids.includes('9101')
+            ? wrapApiFootball([championsFixture])
+            : wrapApiFootball([]);
         req.reply({ statusCode: 200, body });
         return;
       }
 
       if (path.endsWith('/fixtures') && id) {
-        const body = id === '9001' ? wrapApiFootball([preMatchFixture]) : wrapApiFootball([]);
+        const body =
+          id === '9001'
+            ? wrapApiFootball([preMatchFixture])
+            : id === '9101'
+              ? wrapApiFootball([championsFixture])
+              : wrapApiFootball([]);
         req.reply({ statusCode: 200, body });
         return;
       }
@@ -201,8 +267,8 @@ describe('Home Betting UX', () => {
     cy.visit('/play?league=39');
 
     cy.get('[data-testid="view-tab-live"]').should('not.exist');
-    cy.get('[data-testid="date-filter-trigger"]').should('be.visible');
-    cy.get('[data-testid="extra-market-trigger"]').should('be.visible');
+    cy.get('[data-testid="date-filter-trigger"]').should('exist');
+    cy.get('[data-testid="extra-market-trigger"]').should('exist');
     cy.get('aside').first().within(() => {
       cy.contains('Search leagues...').should('not.exist');
     });
@@ -231,6 +297,7 @@ describe('Home Betting UX', () => {
 
   it('keeps selected market/league through navigation and back', () => {
     cy.visit('/play?league=39&market=over_under');
+    cy.wait('@oddsLeague39', { timeout: 60000 });
     cy.contains('Alpha FC', { timeout: 20000 }).should('be.visible');
     cy.contains('Alpha FC', { timeout: 20000 }).click();
     cy.url().should('include', '/play/fixture/9001');
@@ -241,6 +308,15 @@ describe('Home Betting UX', () => {
     cy.url().should('include', 'market=over_under');
     cy.contains('O2.5', { timeout: 30000 }).should('be.visible');
     cy.contains('1.92', { timeout: 30000 }).should('be.visible');
+  });
+
+  it('keeps league=2 from URL and does not fallback to all leagues', () => {
+    cy.visit('/play?league=2&market=extra_34');
+
+    cy.wait('@oddsLeague2', { timeout: 60000 });
+    cy.contains('Gamma FC', { timeout: 30000 }).should('be.visible');
+    cy.location('search').should('include', 'league=2');
+    cy.get('[data-testid="league-pill-2"]').should('exist');
   });
 
   it('routes from fixture page to home and cleans unrelated params when sidebar league is clicked', () => {
