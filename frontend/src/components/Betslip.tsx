@@ -317,13 +317,21 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
               </div>
             ) : activeTab === 'multiple' && bets.length < 2 ? (
               <div className="flex h-full flex-col items-center justify-center p-8 text-center text-[#8a8a8a]">
-                <p className="text-base font-black text-white">Multiple Bets</p>
-                <p className="mt-2 text-sm font-medium">Add at least 2 selections to place a multiple bet.</p>
+                <div className="mb-4 rounded-full bg-[#2a2a2a] p-5 text-[#ffd60a]/20">
+                  <Ticket size={48} />
+                </div>
+                <p className="text-base font-black text-white uppercase tracking-widest">Multiple Bet</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed">Add at least <span className="text-[#ffd60a]">2 selections</span> to activate Multiple mode.</p>
+                <Button variant="outline" onPress={() => setSidebarTab('slip')} className="mt-6 border-[#333] text-xs font-black uppercase tracking-widest px-6 py-2 rounded">Find Matches</Button>
               </div>
             ) : activeTab === 'system' && bets.length < 3 ? (
               <div className="flex h-full flex-col items-center justify-center p-8 text-center text-[#8a8a8a]">
-                <p className="text-base font-black text-white">System Bets</p>
-                <p className="mt-2 text-sm font-medium">Add at least 3 selections to place a system bet.</p>
+                <div className="mb-4 rounded-full bg-[#2a2a2a] p-5 text-[#ffd60a]/20">
+                  <Ticket size={48} />
+                </div>
+                <p className="text-base font-black text-white uppercase tracking-widest">System Bet</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed">Add at least <span className="text-[#ffd60a]">3 selections</span> to activate System mode.</p>
+                <Button variant="outline" onPress={() => setSidebarTab('slip')} className="mt-6 border-[#333] text-xs font-black uppercase tracking-widest px-6 py-2 rounded">Find Matches</Button>
               </div>
             ) : (
               <div className="flex flex-col gap-2 p-3">
@@ -424,7 +432,27 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
                   </div>
                 )}
 
-                <div className="space-y-2 mb-4">
+                <div className="space-y-3 mb-4 border-b border-[#333] pb-4">
+                  {(activeTab === 'multiple' || activeTab === 'system') && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-widest text-[#8a8a8a]">Total Odds</span>
+                      <span className="font-black text-white text-base">
+                        {activeTab === 'multiple'
+                          ? preview.lines[0]?.combinedOdds.toFixed(2)
+                          : (preview.totalPotentialReturn / (preview.totalStake || 1)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+
+                  {preview.lineCount > 1 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-widest text-[#8a8a8a]">Lines</span>
+                      <span className="font-black text-white text-sm">
+                        {preview.lineCount} × {formatCurrency(preview.totalStake / preview.lineCount)}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black uppercase tracking-widest text-[#8a8a8a]">Possible Payout</span>
                     <span className="font-black text-[#ffd60a] text-xl tracking-tight">
