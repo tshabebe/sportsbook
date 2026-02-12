@@ -64,7 +64,7 @@ export function BetSlipPage() {
   }, [replaceBetSlip, searchParams]);
 
   return (
-    <div className="flex h-full flex-col bg-element-bg">
+    <div data-testid="betslip-page" className="flex h-full flex-col bg-element-bg">
       <div className="flex-1 overflow-hidden">
         {hydratingCode ? (
           <div className="border-b border-border-subtle bg-element-hover-bg px-4 py-2 text-xs text-text-muted">

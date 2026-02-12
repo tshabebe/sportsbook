@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
@@ -178,8 +178,10 @@ export function FixtureMarketsPage() {
 
   const isLoading = isLoadingFixture || isLoadingOdds;
 
-  // Auto-expand main markets when data loads
-  if (oddsData?.bookmakers?.[0]?.bets && Object.keys(openMarkets).length === 0) {
+  useEffect(() => {
+    if (!oddsData?.bookmakers?.[0]?.bets) return;
+    if (Object.keys(openMarkets).length > 0) return;
+
     const initialOpenState: Record<string, boolean> = {};
     oddsData.bookmakers[0].bets.forEach((market, idx) => {
       const marketKey = `${market.id}-${market.name}-${idx}`;
@@ -188,11 +190,11 @@ export function FixtureMarketsPage() {
         initialOpenState[marketKey] = true;
       }
     });
-    // activeCategory is 'main' by default, so expanding main markets matches initial view.
+
     if (Object.keys(initialOpenState).length > 0) {
       setOpenMarkets(initialOpenState);
     }
-  }
+  }, [oddsData, openMarkets]);
 
   if (isLoading) {
     return (
@@ -251,6 +253,7 @@ export function FixtureMarketsPage() {
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#333] bg-[#0d0d0d]/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[#0d0d0d]/80">
         <button
+          data-testid="fixture-back-button"
           onClick={() => navigate(-1)}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2a2a2a] text-[#ffffff] hover:bg-[#333]"
         >
@@ -313,7 +316,7 @@ export function FixtureMarketsPage() {
       </div>
 
       {/* Markets List */}
-      <div className="grid gap-3 px-4 pb-8">
+      <div data-testid="fixture-markets-grid" className="grid gap-3 px-4 pb-8">
         {visibleMarkets.length === 0 ? (
           <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-8 text-center text-sm text-[#8a8a8a]">
             No markets available in this category.

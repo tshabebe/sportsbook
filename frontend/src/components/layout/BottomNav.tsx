@@ -13,12 +13,14 @@ export function BottomNav() {
         <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-[#333] bg-[#141414] py-2 pb-safe md:hidden shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
             <NavItem
                 to="/play"
+                testId="bottomnav-sports"
                 icon={<Trophy size={22} />}
                 label="Sports"
                 isActive={pathname === "/play" || pathname === "/play/"}
             />
             <NavItem
                 to="/play/betslip"
+                testId="bottomnav-ticket"
                 icon={<TicketIcon size={22} />}
                 label="Ticket"
                 isActive={isOpen}
@@ -30,12 +32,14 @@ export function BottomNav() {
             />
             <NavItem
                 to="/play/track"
+                testId="bottomnav-track"
                 icon={<Target size={22} />}
                 label="Track"
                 isActive={pathname.startsWith("/play/track")}
             />
             <NavItem
                 to="/retail/login"
+                testId="bottomnav-retail"
                 icon={<User size={22} />}
                 label="Retail"
                 isActive={pathname.startsWith("/retail")}
@@ -48,6 +52,7 @@ function NavItem({
     to,
     icon,
     label,
+    testId,
     isActive,
     badgeCount,
     onClick,
@@ -55,12 +60,13 @@ function NavItem({
     to: string;
     icon: React.ReactNode;
     label: string;
+    testId?: string;
     isActive?: boolean;
     badgeCount?: number;
     onClick?: (e: React.MouseEvent) => void;
 }) {
     return (
-        <Link to={to} onClick={onClick} className="group relative flex flex-1 flex-col items-center justify-center pt-2">
+        <Link data-testid={testId} to={to} onClick={onClick} className="group relative flex flex-1 flex-col items-center justify-center pt-2">
             <div className={cn("relative transition-colors duration-200", isActive ? "text-[#ffd60a]" : "text-[#8a8a8a] group-hover:text-[#ffffff]")}>
                 {icon}
                 {badgeCount !== undefined && badgeCount > 0 && (

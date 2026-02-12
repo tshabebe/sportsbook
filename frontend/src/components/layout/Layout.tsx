@@ -74,11 +74,13 @@ export function Layout() {
 
                 {/* Mobile Betslip Drawer */}
                 <div
+                    data-testid="mobile-betslip-overlay"
                     className={`fixed inset-0 z-40 bg-black/80 transition-opacity md:hidden ${isMobileBetslipOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
                         }`}
                     onClick={toggleBetSlip}
                 />
                 <div
+                    data-testid="mobile-betslip-drawer"
                     className={`fixed inset-x-0 bottom-[60px] top-0 z-40 transform bg-[#141414] transition-transform duration-300 md:hidden ${isMobileBetslipOpen ? 'translate-y-0' : 'translate-y-full'
                         }`}
                 >

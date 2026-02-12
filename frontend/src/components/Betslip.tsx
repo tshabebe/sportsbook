@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { X, Ticket, Copy, Share2, FileText, ChevronLeft, Info } from 'lucide-react';
+import { X, Ticket, Copy, Share2, FileText, ChevronLeft } from 'lucide-react';
 import {
   Button as AriaButton,
   Dialog,
@@ -78,7 +78,8 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
     localStorage.setItem('booked_tickets', JSON.stringify(bookedTickets));
   }, [bookedTickets]);
 
-  useWalletProfile();
+  const { data: walletProfile } = useWalletProfile();
+  const walletBalance = walletProfile?.balance ?? 0;
   const isAuthenticated = Boolean(getAuthToken());
   const primaryChannel: PlaceChannel = isAuthenticated ? 'wallet' : 'retail';
   const primaryActionLabel = isAuthenticated ? 'Place Bet' : 'Book a Bet';
@@ -127,6 +128,20 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
     if (preview.error) {
       setError(preview.error);
       return;
+    }
+
+    if (channel === 'wallet') {
+      const token = getAuthToken();
+      if (!token) {
+        setError('Wallet login is required to place a wallet bet');
+        return;
+      }
+      if (walletBalance < stakeValue) {
+        setError(
+          `Insufficient balance. Available ${formatCurrency(walletBalance)}, required ${formatCurrency(stakeValue)}`,
+        );
+        return;
+      }
     }
 
     setIsPlacing(true);
@@ -249,6 +264,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
       {!viewingTicketCode && (
         <div className="flex border-b border-[#333] bg-[#0c0c0c]">
           <button
+            data-testid="betslip-tab-slip"
             onClick={() => setSidebarTab('slip')}
             className={cn(
               "flex-1 py-3 text-[13px] font-black uppercase tracking-wider transition-all",
@@ -260,6 +276,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
             Bet Slip ({bets.length})
           </button>
           <button
+            data-testid="betslip-tab-mybets"
             onClick={() => setSidebarTab('mybets')}
             className={cn(
               "flex-1 py-3 text-[13px] font-black uppercase tracking-wider transition-all",
@@ -338,6 +355,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
                 {bets.map((bet) => (
                   <div
                     key={bet.id}
+                    data-testid="betslip-selection-row"
                     className="flex flex-col gap-1.5 rounded bg-[#242424] border border-[#333] p-3.5 shadow-sm transition-all hover:border-[#444]"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -474,6 +492,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
                   </Button>
                   <Button
                     variant="solid"
+                    data-testid="betslip-primary-action"
                     className="flex-[2] rounded bg-[#31ae2f] text-sm font-black uppercase tracking-widest text-black hover:bg-[#2a9829] shadow-[0_4px_15px_rgba(49,174,47,0.3)] transition-all active:scale-95 py-4"
                     onPress={() => {
                       void placeSlip(primaryChannel);

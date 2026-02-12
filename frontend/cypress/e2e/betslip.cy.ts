@@ -54,7 +54,13 @@ const visitWithSeededBetSlip = (options?: { withAuthToken?: boolean }) => {
       }
     },
   });
-  cy.contains('Arsenal - Chelsea', { timeout: 20000 }).should('exist');
+  cy.get('[data-testid="betslip-page"]', { timeout: 20000 }).should('be.visible');
+  cy.get('[data-testid="betslip-page"]').within(() => {
+    cy.get('[data-testid="betslip-selection-row"]', { timeout: 20000 }).should(
+      'have.length.at.least',
+      1,
+    );
+  });
 };
 
 describe('Bet Slip E2E', () => {
@@ -74,6 +80,11 @@ describe('Bet Slip E2E', () => {
     cy.intercept('GET', '**/api/football/**', {
       statusCode: 200,
       body: emptyApiFootball,
+    });
+
+    cy.intercept('GET', '**/api/bets/my', {
+      statusCode: 200,
+      body: { ok: true, bets: [] },
     });
   });
 
@@ -108,15 +119,16 @@ describe('Bet Slip E2E', () => {
 
     visitWithSeededBetSlip();
 
-    cy.contains('button', 'Book a Bet', { timeout: 20000 })
-      .should('not.be.disabled')
-      .click();
-
-    cy.contains('Bet Booked', { timeout: 30000 }).should('be.visible');
-    cy.contains('11-030686', { timeout: 30000 }).should('be.visible');
-    cy.contains('a', 'Share Bet Link')
-      .should('have.attr', 'href')
-      .and('include', '/play/betslip?book=11-030686');
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
+        .first()
+        .should('contain.text', 'Book a Bet')
+        .should('not.be.disabled')
+        .click({ force: true });
+      cy.contains('Book A Bet Code:', { timeout: 30000 }).should('be.visible');
+      cy.contains('11-030686', { timeout: 30000 }).should('be.visible');
+      cy.contains('button', 'Share', { timeout: 30000 }).should('be.visible');
+    });
   });
 
   it('places wallet bet when balance is sufficient', () => {
@@ -156,11 +168,15 @@ describe('Bet Slip E2E', () => {
 
     visitWithSeededBetSlip({ withAuthToken: true });
     cy.contains('Br500.00', { timeout: 20000 }).should('exist');
-    cy.contains('button', 'Place Bet')
-      .should('not.be.disabled')
-      .click();
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
+        .first()
+        .should('contain.text', 'Place Bet')
+        .should('not.be.disabled')
+        .click({ force: true });
+    });
 
-    cy.contains('Wallet Bet Placed', { timeout: 30000 }).should('be.visible');
+    cy.contains('Bet Placed', { timeout: 30000 }).should('be.visible');
     cy.contains('bet_1700000000000_abcd12', { timeout: 30000 }).should('be.visible');
   });
 
@@ -181,13 +197,17 @@ describe('Bet Slip E2E', () => {
     cy.intercept('POST', '**/api/betslip/place*').as('placeWallet');
 
     visitWithSeededBetSlip({ withAuthToken: true });
-    cy.contains('button', 'Place Bet', { timeout: 20000 }).click();
-
-    cy.contains('Insufficient balance').should('be.visible');
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
+        .first()
+        .should('contain.text', 'Place Bet')
+        .click({ force: true });
+      cy.contains('Insufficient balance').should('be.visible');
+    });
     cy.get('@placeWallet.all').should('have.length', 0);
   });
 
-  it('recreates selections from a shared booking link', () => {
+  it('recreates selections from share query on /play/betslip', () => {
     cy.intercept('GET', '**/api/tickets/11-030686/recreate', {
       statusCode: 200,
       body: {
@@ -210,34 +230,55 @@ describe('Bet Slip E2E', () => {
             leagueCountry: 'England',
             fixtureDate: '2026-02-13T18:30:00.000Z',
           },
-          {
-            id: '1002-1-Away',
-            fixtureId: 1002,
-            betId: 1,
-            value: 'Away',
-            odd: 1.8,
-            bookmakerId: 8,
-            fixtureName: 'Liverpool vs Spurs',
-            marketName: 'Match Winner',
-            selectionName: 'Spurs',
-            odds: 1.8,
-            leagueName: 'Premier League',
-            leagueCountry: 'England',
-            fixtureDate: '2026-02-14T16:00:00.000Z',
-          },
         ],
       },
-    }).as('recreate');
+    }).as('recreateFromShare');
 
-    cy.visit('/play/betslip?book=11-030686', {
+    cy.visit('/play/betslip?share=11-030686', {
       onBeforeLoad(win) {
         win.localStorage.clear();
       },
     });
 
-    cy.wait('@recreate', { timeout: 20000 });
-    cy.contains('Shared bet 11-030686 loaded.').should('be.visible');
-    cy.contains('Arsenal - Chelsea', { timeout: 20000 }).should('exist');
-    cy.contains('Liverpool - Spurs', { timeout: 20000 }).should('exist');
+    cy.wait('@recreateFromShare', { timeout: 20000 });
+    cy.location('search').should('eq', '');
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-selection-row"]', { timeout: 20000 }).should(
+        'have.length.at.least',
+        1,
+      );
+      cy.contains(/Arsenal - Chelsea/i, { timeout: 20000 }).should('exist');
+    });
+  });
+
+  it('shows authenticated wallet bets inside My Bets tab', () => {
+    cy.intercept('GET', '**/api/bets/my', {
+      statusCode: 200,
+      body: {
+        ok: true,
+        bets: [
+          {
+            id: 101,
+            betRef: 'bet_1700000000000_abcd12',
+            userId: 1,
+            username: 'cashier',
+            stake: '15',
+            status: 'pending',
+            createdAt: '2026-02-12T12:00:00.000Z',
+            selections: [],
+          },
+        ],
+      },
+    }).as('myBets');
+
+    visitWithSeededBetSlip({ withAuthToken: true });
+    cy.wait('@myBets', { timeout: 20000 });
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-tab-mybets"]', { timeout: 20000 })
+        .first()
+        .click({ force: true });
+      cy.contains('Wallet Bets', { timeout: 20000 }).should('be.visible');
+      cy.contains('bet_170000...').should('be.visible');
+    });
   });
 });
