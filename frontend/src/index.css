@@ -56,9 +56,9 @@
     color-scheme: dark;
 
     /* Backgrounds */
-    --color-app-bg: #0d0d0d;
-    --color-element-bg: #1a1a1a;
-    --color-element-hover-bg: #262626;
+    --color-app-bg: #121212;
+    --color-element-bg: #1e1e1e;
+    --color-element-hover-bg: #2a2a2a;
 
     /* Borders */
     --color-border-subtle: #333333;

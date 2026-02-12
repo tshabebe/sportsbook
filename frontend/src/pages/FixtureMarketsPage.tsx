@@ -83,36 +83,38 @@ function MarketAccordion({
   isOpen,
   onToggle,
   children,
+  colsClass = 'grid-cols-2 md:grid-cols-3',
 }: {
   title: string;
   testId: string;
   isOpen: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  colsClass?: string;
 }) {
   return (
     <div
       data-testid={testId}
-      className="overflow-hidden rounded-lg border border-border-subtle bg-element-bg"
+      className="overflow-hidden rounded-lg border border-[#333] bg-[#1d1d1d]"
     >
       <button
         data-testid="market-accordion-toggle"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex w-full items-center justify-between bg-element-hover-bg px-4 py-3 text-left"
+        className="flex w-full items-center justify-between bg-[#2a2a2a] px-4 py-3 text-left transition-colors hover:bg-[#333]"
       >
-        <span className="text-sm font-semibold text-text-contrast">{title}</span>
+        <span className="text-sm font-semibold text-[#fafafa]">{title}</span>
         {isOpen ? (
-          <ChevronUp className="h-5 w-5 text-text-muted" />
+          <ChevronUp className="h-5 w-5 text-[#8a8a8a]" />
         ) : (
-          <ChevronDown className="h-5 w-5 text-text-muted" />
+          <ChevronDown className="h-5 w-5 text-[#8a8a8a]" />
         )}
       </button>
       <div
         data-testid="market-accordion-content"
         className={`${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden transition-all duration-300`}
       >
-        <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-3">
+        <div className={`grid gap-2 p-3 ${colsClass}`}>
           {children}
         </div>
       </div>
@@ -136,11 +138,10 @@ function OutcomeButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-md border px-2 py-2 text-center transition ${
-        isSelected
-          ? 'border-accent-solid bg-accent-solid text-accent-text-contrast'
-          : 'border-border-subtle bg-app-bg text-text-contrast hover:border-accent-solid/50'
-      }`}
+      className={`rounded-md border px-2 py-2 text-center transition ${isSelected
+        ? 'border-accent-solid bg-accent-solid text-accent-text-contrast'
+        : 'border-border-subtle bg-app-bg text-text-contrast hover:border-accent-solid/50'
+        }`}
     >
       <div className="text-[11px] leading-tight opacity-90">{label}{handicap ? ` ${handicap}` : ''}</div>
       <div className="mt-1 text-sm font-semibold">{odd}</div>
@@ -177,18 +178,36 @@ export function FixtureMarketsPage() {
 
   const isLoading = isLoadingFixture || isLoadingOdds;
 
+  // Auto-expand main markets when data loads
+  if (oddsData?.bookmakers?.[0]?.bets && Object.keys(openMarkets).length === 0) {
+    const initialOpenState: Record<string, boolean> = {};
+    oddsData.bookmakers[0].bets.forEach((market, idx) => {
+      const marketKey = `${market.id}-${market.name}-${idx}`;
+      const category = classifyMarket(market.name);
+      if (category === 'main' || category === 'totals') {
+        initialOpenState[marketKey] = true;
+      }
+    });
+    // activeCategory is 'main' by default, so expanding main markets matches initial view.
+    if (Object.keys(initialOpenState).length > 0) {
+      setOpenMarkets(initialOpenState);
+    }
+  }
+
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-16 animate-pulse rounded-lg bg-element-hover-bg" />
-        <div className="h-24 animate-pulse rounded-lg bg-element-hover-bg" />
-        <div className="h-10 animate-pulse rounded-lg bg-element-hover-bg" />
-        <div className="h-72 animate-pulse rounded-lg bg-element-hover-bg" />
+      <div className="space-y-4 p-4">
+        <div className="h-40 animate-pulse rounded-xl bg-[#1d1d1d]" />
+        <div className="h-12 animate-pulse rounded-lg bg-[#1d1d1d]" />
+        <div className="space-y-3">
+          <div className="h-64 animate-pulse rounded-lg bg-[#1d1d1d]" />
+          <div className="h-64 animate-pulse rounded-lg bg-[#1d1d1d]" />
+        </div>
       </div>
     );
   }
 
-  if (!fixtureDetails) return <div className="py-16 text-center text-text-muted">Fixture not found.</div>;
+  if (!fixtureDetails) return <div className="py-20 text-center text-[#8a8a8a]">Fixture not found.</div>;
 
   const fixture = fixtureDetails.fixture;
   const league = fixtureDetails.league;
@@ -219,7 +238,7 @@ export function FixtureMarketsPage() {
 
   categorized.all = markets;
 
-  const visibleMarkets = categorized[activeCategory];
+  const visibleMarkets = categorized[activeCategory] || [];
 
   const toggleMarket = (marketKey: string) => {
     setOpenMarkets((prev) => ({ ...prev, [marketKey]: !prev[marketKey] }));
@@ -228,65 +247,93 @@ export function FixtureMarketsPage() {
   const isSelected = (selectionId: string) => bets.some((b) => b.id === selectionId);
 
   return (
-    <div className="mx-auto w-full max-w-[980px] space-y-4 pb-20">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border-subtle bg-app-bg/95 px-1 py-2 backdrop-blur">
+    <div className="mx-auto w-full max-w-[980px] pb-24">
+      {/* Sticky Header */}
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#333] bg-[#0d0d0d]/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[#0d0d0d]/80">
         <button
-          data-testid="fixture-back-button"
           onClick={() => navigate(-1)}
-          className="rounded-md p-1.5 hover:bg-element-hover-bg"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2a2a2a] text-[#ffffff] hover:bg-[#333]"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-text-contrast">{teams.home.name} vs {teams.away.name}</div>
-          <div className="text-[11px] text-text-muted">{league.name} • {formatFixtureTime(fixture.date)}</div>
+        <div className="min-w-0 flex-1 text-center">
+          <h1 className="truncate text-sm font-bold text-[#ffffff]">{teams.home.name} vs {teams.away.name}</h1>
+          <p className="truncate text-[11px] text-[#8a8a8a]">{league.name}</p>
+        </div>
+        <div className="w-8" /> {/* Spacer for centering */}
+      </div>
+
+      {/* Scoreboard / Info Card */}
+      <div className="px-4 py-4">
+        <div className="rounded-2xl bg-gradient-to-br from-[#1d1d1d] to-[#141414] p-6 shadow-lg border border-[#333]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#8a8a8a] bg-[#2a2a2a] px-2 py-0.5 rounded">
+              {formatFixtureTime(fixture.date)}
+            </div>
+
+            <div className="flex w-full items-center justify-between">
+              <div className="flex flex-1 flex-col items-center gap-2 text-center">
+                <img src={teams.home.logo} alt={teams.home.name} className="h-16 w-16 object-contain drop-shadow-md" />
+                <span className="text-sm font-bold text-[#ffffff] leading-tight">{teams.home.name}</span>
+              </div>
+
+              <div className="mx-2 flex flex-col items-center">
+                <span className="text-2xl font-black text-[#ffd60a] tracking-widest">VS</span>
+              </div>
+
+              <div className="flex flex-1 flex-col items-center gap-2 text-center">
+                <img src={teams.away.logo} alt={teams.away.name} className="h-16 w-16 object-contain drop-shadow-md" />
+                <span className="text-sm font-bold text-[#ffffff] leading-tight">{teams.away.name}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-xl border border-border-subtle bg-element-bg p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <img src={teams.home.logo} alt={teams.home.name} className="h-9 w-9 object-contain" />
-            <div className="truncate text-sm font-semibold">{teams.home.name}</div>
-          </div>
-          <div className="text-sm font-bold text-text-muted">VS</div>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
-            <div className="truncate text-right text-sm font-semibold">{teams.away.name}</div>
-            <img src={teams.away.logo} alt={teams.away.name} className="h-9 w-9 object-contain" />
-          </div>
+      {/* Categories */}
+      <div className="sticky top-[57px] z-10 bg-[#0d0d0d] px-4 pb-2 pt-0">
+        <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {categoryOrder.map((cat) => {
+            const count = cat.key === 'all' ? markets.length : categorized[cat.key].length;
+            if (count === 0 && cat.key !== 'all') return null;
+            return (
+              <button
+                key={cat.key}
+                onClick={() => setActiveCategory(cat.key)}
+                className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${activeCategory === cat.key
+                  ? 'bg-[#ffd60a] text-[#000000] shadow-[0_0_10px_rgba(255,214,10,0.3)]'
+                  : 'bg-[#1d1d1d] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-[#ffffff]'
+                  }`}
+              >
+                {cat.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {categoryOrder.map((cat) => {
-          const count = cat.key === 'all' ? markets.length : categorized[cat.key].length;
-          if (count === 0 && cat.key !== 'all') return null;
-          return (
-            <button
-              key={cat.key}
-              onClick={() => setActiveCategory(cat.key)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-                activeCategory === cat.key ? 'bg-accent-solid text-accent-text-contrast' : 'bg-element-bg text-text-muted'
-              }`}
-            >
-              {cat.label} {count > 0 ? `(${count})` : ''}
-            </button>
-          );
-        })}
-      </div>
-
-      <div
-        data-testid="fixture-markets-grid"
-        className="grid grid-cols-1 gap-3 md:grid-cols-2"
-      >
+      {/* Markets List */}
+      <div className="grid gap-3 px-4 pb-8">
         {visibleMarkets.length === 0 ? (
-          <div className="rounded-lg border border-border-subtle bg-element-bg p-6 text-center text-sm text-text-muted md:col-span-2">
+          <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-8 text-center text-sm text-[#8a8a8a]">
             No markets available in this category.
           </div>
         ) : (
           visibleMarkets.map((market, marketIdx) => {
             const marketKey = `${market.id}-${market.name}-${marketIdx}`;
             const marketTestId = `market-accordion-${market.id}-${marketIdx}`;
+
+            // Determine adaptive grid columns
+            // If exactly 3 outcomes (like 1X2), use grid-cols-3
+            // If 2 outcomes (Over/Under), use grid-cols-2
+            // Else default to grid-cols-2 or grid-cols-3 based on count
+            const outcomeCount = market.values.length;
+            const gridColsClass = outcomeCount === 3
+              ? 'grid-cols-3'
+              : outcomeCount === 2
+                ? 'grid-cols-2'
+                : 'grid-cols-2 md:grid-cols-3';
+
             return (
               <MarketAccordion
                 key={marketKey}
@@ -294,6 +341,7 @@ export function FixtureMarketsPage() {
                 title={market.name}
                 isOpen={openMarkets[marketKey] ?? false}
                 onToggle={() => toggleMarket(marketKey)}
+                colsClass={gridColsClass}
               >
                 {market.values.map((outcome, idx) => {
                   const selectionId = `${fixture.id}-${marketKey}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;

@@ -136,108 +136,108 @@ export function FixtureRow({
   const extraRows =
     extraColumnLabels.length > 0
       ? extraColumnLabels.map((label) => {
-          const value = extraValueByLabel.get(label);
-          if (!value) {
-            return {
-              label,
-              selection: label,
-              selectionName: label,
-              odd: undefined,
-            };
-          }
-
+        const value = extraValueByLabel.get(label);
+        if (!value) {
           return {
             label,
-            selection: value.value,
-            selectionName: formatOutcomeLabel(value.value, value.handicap),
-            odd: value.odd,
-            handicap: value.handicap,
+            selection: label,
+            selectionName: label,
+            odd: undefined,
           };
-        })
-      : ['A', 'B', 'C'].map((label) => ({
+        }
+
+        return {
           label,
-          selection: label,
-          selectionName: label,
-          odd: undefined,
-        }));
+          selection: value.value,
+          selectionName: formatOutcomeLabel(value.value, value.handicap),
+          odd: value.odd,
+          handicap: value.handicap,
+        };
+      })
+      : ['A', 'B', 'C'].map((label) => ({
+        label,
+        selection: label,
+        selectionName: label,
+        odd: undefined,
+      }));
 
   const market: DisplayMarket =
     extraMarketId !== null
       ? {
-          betId: extraMarketId,
-          marketName: selectedExtraMarket?.name ?? selectedMarketLabel ?? 'Market',
-          rows: extraRows,
-        }
+        betId: extraMarketId,
+        marketName: selectedExtraMarket?.name ?? selectedMarketLabel ?? 'Market',
+        rows: extraRows,
+      }
       : marketView === 'double_chance'
         ? {
-            betId: 12,
-            marketName: 'Double Chance',
+          betId: 12,
+          marketName: 'Double Chance',
+          rows: [
+            {
+              label: '1/X',
+              selection: 'Home/Draw',
+              selectionName: 'Home/Draw',
+              odd: doubleChanceOdds?.homeDraw,
+            },
+            {
+              label: '1/2',
+              selection: 'Home/Away',
+              selectionName: 'Home/Away',
+              odd: doubleChanceOdds?.homeAway,
+            },
+            {
+              label: 'X/2',
+              selection: 'Draw/Away',
+              selectionName: 'Draw/Away',
+              odd: doubleChanceOdds?.drawAway,
+            },
+          ],
+        }
+        : marketView === 'over_under'
+          ? {
+            betId: 5,
+            marketName: 'Over/Under 2.5',
             rows: [
               {
-                label: '1/X',
-                selection: 'Home/Draw',
-                selectionName: 'Home/Draw',
-                odd: doubleChanceOdds?.homeDraw,
+                label: 'O2.5',
+                selection: 'Over 2.5',
+                selectionName: 'Over 2.5',
+                odd: totalsOdds?.over25,
               },
               {
-                label: '1/2',
-                selection: 'Home/Away',
-                selectionName: 'Home/Away',
-                odd: doubleChanceOdds?.homeAway,
-              },
-              {
-                label: 'X/2',
-                selection: 'Draw/Away',
-                selectionName: 'Draw/Away',
-                odd: doubleChanceOdds?.drawAway,
+                label: 'U2.5',
+                selection: 'Under 2.5',
+                selectionName: 'Under 2.5',
+                odd: totalsOdds?.under25,
               },
             ],
           }
-        : marketView === 'over_under'
-          ? {
-              betId: 5,
-              marketName: 'Over/Under 2.5',
-              rows: [
-                {
-                  label: 'O2.5',
-                  selection: 'Over 2.5',
-                  selectionName: 'Over 2.5',
-                  odd: totalsOdds?.over25,
-                },
-                {
-                  label: 'U2.5',
-                  selection: 'Under 2.5',
-                  selectionName: 'Under 2.5',
-                  odd: totalsOdds?.under25,
-                },
-              ],
-            }
           : {
-              betId: 1,
-              marketName: 'Match Winner',
-              rows: [
-                {
-                  label: '1',
-                  selection: 'Home',
-                  selectionName: fixture.teams.home.name,
-                  odd: homeOdd,
-                },
-                {
-                  label: 'X',
-                  selection: 'Draw',
-                  selectionName: 'Draw',
-                  odd: drawOdd,
-                },
-                {
-                  label: '2',
-                  selection: 'Away',
-                  selectionName: fixture.teams.away.name,
-                  odd: awayOdd,
-                },
-              ],
-            };
+            betId: 1,
+            marketName: 'Match Winner',
+            rows: [
+              {
+                label: '1',
+                selection: 'Home',
+                selectionName: fixture.teams.home.name,
+                odd: homeOdd,
+              },
+              {
+                label: 'X',
+                selection: 'Draw',
+                selectionName: 'Draw',
+                odd: drawOdd,
+              },
+              {
+                label: '2',
+                selection: 'Away',
+                selectionName: fixture.teams.away.name,
+                odd: awayOdd,
+              },
+            ],
+          };
 
-  const marketGridClass = market.rows.length === 2 ? 'w-52 grid-cols-2' : 'w-64 grid-cols-3';
+  const marketGridClass = market.rows.length === 2 ? 'w-36 md:w-52 grid-cols-2' : 'w-48 md:w-64 grid-cols-3';
 
   return (
     <div
@@ -400,19 +400,17 @@ function OddButton({
     <button
       onClick={onClick}
       disabled={!isSelectable}
-      className={`group/btn flex h-full w-full flex-col items-center justify-center rounded border px-1 py-2 transition-colors ${
-        isSelected
+      className={`group/btn flex h-full w-full flex-col items-center justify-center rounded border px-1 py-2 transition-colors ${isSelected
           ? 'border-[#ffd60a] bg-[#ffd60a] text-[#1d1d1d]'
           : isSelectable
             ? 'border-[#111] bg-[#3a3a3a] hover:bg-[#4a4a4a] active:bg-[#2b2b2b]'
             : 'cursor-not-allowed border-[#222] bg-[#2b2b2b] text-[#8a8a8a]'
-      }`}
+        }`}
     >
       {showLabel && (
         <span
-          className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${
-            isSelected ? 'text-[#1d1d1d]/80' : 'text-[#e6e6e6]'
-          }`}
+          className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-[#1d1d1d]/80' : 'text-[#e6e6e6]'
+            }`}
         >
           {subLabel || label}
         </span>

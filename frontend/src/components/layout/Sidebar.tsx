@@ -53,20 +53,15 @@ export function Sidebar() {
 
   return (
     <aside className="hidden h-full w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-element-bg md:flex">
-      <div className="space-y-1 border-b border-border-subtle bg-app-bg px-4 py-3 text-[11px] text-text-muted">
-        <p>1. Pick a league</p>
-        <p>2. Select odds in main board</p>
-        <p>3. Book or place from bet slip</p>
-      </div>
+
 
       <button
         type="button"
         onClick={() => handleLeagueClick(0)}
-        className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors ${
-          selectedLeagueId === 0
+        className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors ${selectedLeagueId === 0
             ? 'bg-accent-solid/10 font-semibold text-accent-solid'
             : 'text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
-        }`}
+          }`}
       >
         <span className="flex items-center gap-3">
           <span className="flex h-5 w-5 items-center justify-center rounded">
@@ -100,11 +95,10 @@ export function Sidebar() {
                 key={league.id}
                 type="button"
                 onClick={() => handleLeagueClick(league.id)}
-                className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
-                  selectedLeagueId === league.id
+                className={`flex w-full items-center justify-between px-4 py-2 text-left text-sm transition-colors ${selectedLeagueId === league.id
                     ? 'bg-accent-solid/10 font-semibold text-accent-solid'
                     : 'text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
-                }`}
+                  }`}
               >
                 <span className="flex items-center gap-3">
                   <img

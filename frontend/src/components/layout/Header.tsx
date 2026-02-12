@@ -11,14 +11,18 @@ import { useWalletProfile } from '../../hooks/useWallet';
 import { formatCurrency } from '../../config/currency';
 import logo from '../../assets/logo.png';
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { data } = useWalletProfile();
   const navigate = useNavigate();
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-border-subtle bg-element-bg px-4">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" aria-label="Main menu">
+        <Button variant="ghost" size="icon" aria-label="Main menu" onPress={onMenuClick}>
           <Menu size={20} />
         </Button>
         <img src={logo} alt="Logo" className="h-10 w-auto object-contain" />

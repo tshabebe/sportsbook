@@ -1,4 +1,4 @@
-import { useState } from 'react';
+
 import type { Fixture } from '../hooks/useFootball';
 import { FixtureRow } from './FixtureRow';
 
@@ -23,13 +23,10 @@ export function LeagueGroup({
   leagueLogo,
   countryFlag,
   fixtures,
-  defaultExpanded = true,
   marketView = '1x2',
   selectedMarketLabel,
   selectedMarketHeaders,
 }: LeagueGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
-
   // Fallback logo if country flag is missing.
   const logoUrl =
     countryFlag || leagueLogo || fixtures[0]?.league.flag || fixtures[0]?.league.logo;
@@ -41,18 +38,25 @@ export function LeagueGroup({
       : marketView === 'over_under'
         ? ['O2.5', 'U2.5']
         : ['1', 'X', '2'];
+
+  // Match the responsive widths from FixtureRow
   const marketHeaderClass =
-    marketHeaders.length === 2 ? 'w-52 grid grid-cols-2' : 'w-64 grid grid-cols-3';
+    marketHeaders.length === 2
+      ? 'w-36 md:w-52 grid grid-cols-2'
+      : 'w-48 md:w-64 grid grid-cols-3';
+
   const headerTitle = isExtraMarketView(marketView) ? selectedMarketLabel : null;
 
   return (
     <div className="mb-2 flex w-full flex-col overflow-hidden rounded-lg border border-[#333] bg-[#1d1d1d]">
       {/* League Header */}
       <div
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="flex cursor-pointer items-center justify-between bg-gradient-to-b from-[#2f5e1f] to-[#173a10] px-4 py-2 transition-colors hover:from-[#376a24] hover:to-[#1b4512]"
+        className="flex items-center gap-4 border-b border-[#333] bg-[#2a2a2a] px-4 py-2"
       >
-        <div className="flex min-w-0 items-center gap-3">
+        {/* Time Spacer */}
+        <div className="hidden md:block w-16 shrink-0" />
+
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {logoUrl && (
             <img src={logoUrl} alt={leagueName} className="h-5 w-5 shrink-0 object-contain" />
           )}
@@ -67,9 +71,12 @@ export function LeagueGroup({
           </div>
         </div>
 
+        {/* Score Spacer */}
+        <div className="hidden md:block w-12 shrink-0" />
+
         <div className="flex items-center gap-2">
           {headerTitle ? (
-            <span className="max-w-[160px] truncate text-[11px] font-semibold text-[#e6e6e6] md:max-w-[200px] md:uppercase md:tracking-[0.08em]">
+            <span className="hidden md:block max-w-[160px] truncate text-[11px] font-semibold text-[#e6e6e6] md:max-w-[200px] md:uppercase md:tracking-[0.08em] mr-2">
               {headerTitle}
             </span>
           ) : null}
@@ -80,26 +87,14 @@ export function LeagueGroup({
               </span>
             ))}
           </div>
-          {/* Chevron */}
-          <div
-            className={`flex w-8 items-center justify-center text-[#e6e6e6] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </div>
         </div>
+
+        {/* Plus Button Spacer */}
+        <div className="hidden md:block w-8 shrink-0" />
       </div>
 
       {/* Fixtures List */}
-      <div
-        className={`flex w-full flex-col transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[5000px] opacity-100' : 'max-h-0 opacity-0'}`}
-      >
+      <div className="flex w-full flex-col">
         {fixtures.map((fixture) => (
           <FixtureRow
             key={fixture.fixture.id}

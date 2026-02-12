@@ -1,11 +1,11 @@
-import { Battery, Menu, Signal, User, Wifi } from 'lucide-react';
+import { User } from 'lucide-react';
 import {
   Menu as AriaMenu,
   MenuItem,
   MenuTrigger,
   Popover,
 } from 'react-aria-components';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/Button';
 import { useWalletProfile } from '../../hooks/useWallet';
 import { formatCurrency } from '../../config/currency';
@@ -17,20 +17,12 @@ export function MobileHeader() {
 
   return (
     <header className="flex flex-col border-b border-border-subtle bg-element-bg md:hidden">
-      <div className="flex items-center justify-between px-4 py-1 text-[10px] text-text-muted">
-        <span>9:41</span>
-        <div className="flex items-center gap-1">
-          <Signal size={10} />
-          <Wifi size={10} />
-          <Battery size={10} />
-        </div>
-      </div>
+
 
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Menu size={20} className="text-text-contrast" />
-          <img src={logo} alt="Logo" className="h-22 w-auto object-contain" />
-        </div>
+        <Link to="/" className="flex items-center gap-3">
+          <img src={logo} alt="Logo" className="h-8 w-auto object-contain" />
+        </Link>
 
         <div className="flex items-center gap-2 rounded-lg bg-element-hover-bg p-1 pl-2">
           <span className="text-xs font-medium text-text-contrast">{formatCurrency(data?.balance ?? 0)}</span>

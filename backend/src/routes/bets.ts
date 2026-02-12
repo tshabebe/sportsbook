@@ -355,79 +355,79 @@ router.post(
 );
 
 const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
-    const parsed = betSlipSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
-    }
-    const slip: ApiBetSlipInput = parsed.data;
-    const riskCheck = checkSlipRisk(slip);
-    if (!riskCheck.ok) {
-      res.status(409).json({ ok: false, error: riskCheck });
-      return;
-    }
+  const parsed = betSlipSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
+  }
+  const slip: ApiBetSlipInput = parsed.data;
+  const riskCheck = checkSlipRisk(slip);
+  if (!riskCheck.ok) {
+    res.status(409).json({ ok: false, error: riskCheck });
+    return;
+  }
 
-    const validation = await validateSlipSelections(slip, false);
-    if (!validation.ok) {
-      res.status(409).json({
-        ok: false,
-        reason: 'Odds changed or unavailable',
-        validation: validation.results,
-      });
-      return;
-    }
-
-    const rootTicketId = generateRetailBookCode();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
-    const tickets = [];
-    const bets = [];
-    for (const [index, line] of validation.lines.entries()) {
-      const ticketId = index === 0 ? rootTicketId : `${rootTicketId}-${index + 1}`;
-      const lineSlip: ApiBetSlipInput = {
-        ...slip,
-        selections: line.selections,
-        stake: line.stake,
-        mode: 'multiple',
-        systemSize: undefined,
-      };
-      const betRef = `retail_${ticketId}`;
-      const betId = await createBetWithSelections(
-        betRef,
-        lineSlip,
-        {},
-        'pending',
-        undefined,
-        { channel: 'online_retail_ticket', ticketId },
-      );
-      if (!betId) {
-        throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
-      }
-      const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
-      const bet = await getBetWithSelections(betId);
-      tickets.push(ticket);
-      bets.push(bet);
-    }
-
-    res.json({
-      ok: true,
-      bookCode: rootTicketId,
-      ticketBatchId: rootTicketId,
-      mode: slip.mode,
-      totalStake: slip.stake,
-      totalPotentialPayout: totalPotentialPayout(validation.lines),
-      lineCount: validation.lines.length,
-      tickets: tickets.map((ticket) => ({
-        ticketId: ticket.ticketId,
-        status: ticket.status,
-        expiresAt: ticket.expiresAt,
-      })),
-      bets,
-      ticket: {
-        ticketId: tickets[0]?.ticketId ?? rootTicketId,
-        status: tickets[0]?.status ?? 'open',
-        expiresAt: tickets[0]?.expiresAt ?? null,
-      },
-      bet: bets[0] ?? null,
+  const validation = await validateSlipSelections(slip, false);
+  if (!validation.ok) {
+    res.status(409).json({
+      ok: false,
+      reason: 'Odds changed or unavailable',
+      validation: validation.results,
     });
+    return;
+  }
+
+  const rootTicketId = generateRetailBookCode();
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
+  const tickets = [];
+  const bets = [];
+  for (const [index, line] of validation.lines.entries()) {
+    const ticketId = index === 0 ? rootTicketId : `${rootTicketId}-${index + 1}`;
+    const lineSlip: ApiBetSlipInput = {
+      ...slip,
+      selections: line.selections,
+      stake: line.stake,
+      mode: 'multiple',
+      systemSize: undefined,
+    };
+    const betRef = `retail_${ticketId}`;
+    const betId = await createBetWithSelections(
+      betRef,
+      lineSlip,
+      {},
+      'pending',
+      undefined,
+      { channel: 'online_retail_ticket', ticketId },
+    );
+    if (!betId) {
+      throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
+    }
+    const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
+    const bet = await getBetWithSelections(betId);
+    tickets.push(ticket);
+    bets.push(bet);
+  }
+
+  res.json({
+    ok: true,
+    bookCode: rootTicketId,
+    ticketBatchId: rootTicketId,
+    mode: slip.mode,
+    totalStake: slip.stake,
+    totalPotentialPayout: totalPotentialPayout(validation.lines),
+    lineCount: validation.lines.length,
+    tickets: tickets.map((ticket) => ({
+      ticketId: ticket.ticketId,
+      status: ticket.status,
+      expiresAt: ticket.expiresAt,
+    })),
+    bets,
+    ticket: {
+      ticketId: tickets[0]?.ticketId ?? rootTicketId,
+      status: tickets[0]?.status ?? 'open',
+      expiresAt: tickets[0]?.expiresAt ?? null,
+    },
+    bet: bets[0] ?? null,
+  });
 };
 
 router.post(
@@ -490,10 +490,10 @@ router.get(
         for (const payload of fixtureResponses) {
           const response = Array.isArray((payload as { response?: unknown }).response)
             ? ((payload as { response: unknown[] }).response as Array<{
-                fixture?: { id?: number; date?: string };
-                league?: { name?: string; country?: string };
-                teams?: { home?: { name?: string }; away?: { name?: string } };
-              }>)
+              fixture?: { id?: number; date?: string };
+              league?: { name?: string; country?: string };
+              teams?: { home?: { name?: string }; away?: { name?: string } };
+            }>)
             : [];
 
           for (const fixture of response) {
@@ -596,6 +596,29 @@ router.get(
 );
 
 router.get(
+  '/bets/my',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = requireBearerToken(req);
+    const profile = (await walletClient.getProfile(token)) as unknown as Record<string, any>;
+    const userData = profile?.userData || profile;
+    const userIdRaw = userData?.chatId || userData?.user_id || userData?.id;
+    const userId = Number(userIdRaw);
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new HttpError(401, 'INVALID_WALLET_PROFILE', 'User not authenticated');
+    }
+
+    // Since listBetsWithSelections returns everything, we filter it here or add a new service.
+    // Let's add a filtering logic or a new service call if possible. 
+    // For now, filtering the result of listBetsWithSelections for speed.
+    const allBets = await listBetsWithSelections();
+    const userBets = allBets.filter(bet => bet.userId === userId);
+
+    res.json({ ok: true, bets: userBets });
+  }),
+);
+
+router.get(
   '/bets',
   asyncHandler(async (_req: Request, res: Response) => {
     const bets = await listBetsWithSelections();
@@ -625,48 +648,48 @@ router.get('/bets/fixture/:fixtureId/pending', asyncHandler(async (req: Request,
 }));
 
 router.post('/bets/:id/settle', asyncHandler(async (req: Request, res: Response) => {
-    const token = requireBearerToken(req);
-    const betId = Number(req.params.id);
-    if (!Number.isFinite(betId)) {
-      throw new HttpError(400, 'INVALID_BET_ID', 'Invalid bet id');
-    }
-    const parsed = settleBetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new HttpError(400, 'INVALID_SETTLEMENT', 'Invalid settlement payload', parsed.error.flatten());
-    }
-    const { result, payout } = parsed.data;
-    const bet = await getBetWithSelections(betId);
-    if (!bet) {
-      throw new HttpError(404, 'BET_NOT_FOUND', 'Bet not found');
-    }
-    if (bet.status !== 'pending') {
-      throw new HttpError(409, 'ALREADY_SETTLED', 'Bet already settled');
-    }
+  const token = requireBearerToken(req);
+  const betId = Number(req.params.id);
+  if (!Number.isFinite(betId)) {
+    throw new HttpError(400, 'INVALID_BET_ID', 'Invalid bet id');
+  }
+  const parsed = settleBetSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new HttpError(400, 'INVALID_SETTLEMENT', 'Invalid settlement payload', parsed.error.flatten());
+  }
+  const { result, payout } = parsed.data;
+  const bet = await getBetWithSelections(betId);
+  if (!bet) {
+    throw new HttpError(404, 'BET_NOT_FOUND', 'Bet not found');
+  }
+  if (bet.status !== 'pending') {
+    throw new HttpError(409, 'ALREADY_SETTLED', 'Bet already settled');
+  }
 
-    let walletCreditTx: string | null = null;
-    const creditAmount = Number(payout ?? 0);
-    if (result === 'won' && creditAmount > 0) {
-      walletCreditTx = `CREDIT_${bet.betRef}_${Date.now()}`;
-      await walletClient.credit(token, {
-        chatId: bet.userId ?? undefined,
-        username: bet.username ?? undefined,
-        amount: creditAmount,
-        game: config.walletGameName,
-        round_id: bet.betRef,
-        transaction_id: walletCreditTx,
-        debit_transaction_id: bet.walletDebitTx ?? undefined,
-      });
-    }
-    const updated = await updateBetSettlement(betId, {
-      status: result,
-      result,
-      payout: creditAmount || null,
-      walletCreditTx,
+  let walletCreditTx: string | null = null;
+  const creditAmount = Number(payout ?? 0);
+  if (result === 'won' && creditAmount > 0) {
+    walletCreditTx = `CREDIT_${bet.betRef}_${Date.now()}`;
+    await walletClient.credit(token, {
+      chatId: bet.userId ?? undefined,
+      username: bet.username ?? undefined,
+      amount: creditAmount,
+      game: config.walletGameName,
+      round_id: bet.betRef,
+      transaction_id: walletCreditTx,
+      debit_transaction_id: bet.walletDebitTx ?? undefined,
     });
-    await settleRetailTicketByBet({
-      betId,
-      result,
-      payout: creditAmount || null,
-    });
-    res.json({ ok: true, bet: updated });
+  }
+  const updated = await updateBetSettlement(betId, {
+    status: result,
+    result,
+    payout: creditAmount || null,
+    walletCreditTx,
+  });
+  await settleRetailTicketByBet({
+    betId,
+    result,
+    payout: creditAmount || null,
+  });
+  res.json({ ok: true, bet: updated });
 }));
