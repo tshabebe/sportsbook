@@ -13,30 +13,9 @@ export function Layout() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isBetslipOpen, setIsBetslipOpen] = useState(true);
 
-    const { isOpen: isMobileBetslipOpen, toggleBetSlip, replaceBetSlip } = useBetSlip();
+    const { isOpen: isMobileBetslipOpen, toggleBetSlip } = useBetSlip();
     const location = useLocation();
     const isAuthenticated = Boolean(getAuthToken());
-
-    // Sharing / Recreate Logic
-    useEffect(() => {
-        const params = new URLSearchParams(location.search);
-        const shareCode = params.get('share');
-        if (shareCode) {
-            const loadSharedTicket = async () => {
-                try {
-                    const { data } = await import("../../lib/api").then(m => m.api.get(`/tickets/${shareCode}/recreate`));
-                    if (data.ok && data.bets) {
-                        replaceBetSlip(data.bets);
-                        // Clean URL
-                        window.history.replaceState({}, '', window.location.pathname);
-                    }
-                } catch (err) {
-                    console.error("Failed to load shared ticket", err);
-                }
-            };
-            void loadSharedTicket();
-        }
-    }, [location.search, replaceBetSlip]);
 
     // Close mobile betslip when navigating
     useEffect(() => {

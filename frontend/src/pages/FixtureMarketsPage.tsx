@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, ChevronDown, ChevronUp } from 'lucide-react';
@@ -178,24 +178,6 @@ export function FixtureMarketsPage() {
 
   const isLoading = isLoadingFixture || isLoadingOdds;
 
-  useEffect(() => {
-    if (!oddsData?.bookmakers?.[0]?.bets) return;
-    if (Object.keys(openMarkets).length > 0) return;
-
-    const initialOpenState: Record<string, boolean> = {};
-    oddsData.bookmakers[0].bets.forEach((market, idx) => {
-      const marketKey = `${market.id}-${market.name}-${idx}`;
-      const category = classifyMarket(market.name);
-      if (category === 'main' || category === 'totals') {
-        initialOpenState[marketKey] = true;
-      }
-    });
-
-    if (Object.keys(initialOpenState).length > 0) {
-      setOpenMarkets(initialOpenState);
-    }
-  }, [oddsData, openMarkets]);
-
   if (isLoading) {
     return (
       <div className="space-y-4 p-4">
@@ -316,7 +298,7 @@ export function FixtureMarketsPage() {
       </div>
 
       {/* Markets List */}
-      <div data-testid="fixture-markets-grid" className="grid gap-3 px-4 pb-8">
+      <div data-testid="fixture-markets-grid" className="grid gap-3 px-4 pb-8 md:grid-cols-2">
         {visibleMarkets.length === 0 ? (
           <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-8 text-center text-sm text-[#8a8a8a]">
             No markets available in this category.

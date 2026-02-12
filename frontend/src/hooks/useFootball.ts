@@ -8,6 +8,7 @@ import type {
 } from '../types/football';
 import { compareIsoAsc, isPastIso } from '../lib/date';
 import { getCurrentSeason } from '../lib/seasons';
+import { PREMATCH_LEAGUE_IDS } from '../data/leagues';
 
 type LeagueResponseItem = {
   seasons?: Array<{ current: boolean; year: number }>;
@@ -43,7 +44,7 @@ export interface FixtureMarket {
   values: FixtureMarketValue[];
 }
 
-export const TARGET_PREMATCH_LEAGUES = [39, 2, 40, 135, 140, 78, 61, 88, 45] as const;
+export const TARGET_PREMATCH_LEAGUES = PREMATCH_LEAGUE_IDS;
 
 const EMPTY_ODDS: Fixture['odds'] = {
   home: '',

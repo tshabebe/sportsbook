@@ -241,7 +241,6 @@ describe('Bet Slip E2E', () => {
     });
 
     cy.wait('@recreateFromShare', { timeout: 20000 });
-    cy.location('search').should('eq', '');
     cy.get('[data-testid="betslip-page"]').within(() => {
       cy.get('[data-testid="betslip-selection-row"]', { timeout: 20000 }).should(
         'have.length.at.least',

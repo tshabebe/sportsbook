@@ -172,10 +172,13 @@ const liveOdds = {
   ],
 };
 
+let leagueOddsRequests: string[] = [];
+
 describe('Home Betting UX', () => {
   beforeEach(() => {
     cy.viewport(1280, 800);
     let delayedLeagueOdds = false;
+    leagueOddsRequests = [];
 
     cy.intercept('GET', '**/api/football/**', (req) => {
       const url = new URL(req.url);
@@ -208,6 +211,7 @@ describe('Home Betting UX', () => {
           return;
         }
         if (leagueId) {
+          leagueOddsRequests.push(leagueId);
           if (leagueId === '39') {
             req.alias = 'oddsLeague39';
           }
@@ -327,10 +331,16 @@ describe('Home Betting UX', () => {
     cy.contains('Alpha FC', { timeout: 20000 }).click();
     cy.url().should('include', '/play/fixture/9001');
 
-    cy.get('[data-testid="fixture-markets-grid"]').should('exist');
-    cy.get('[data-testid="market-accordion-toggle"]')
+    cy.get('[data-testid="fixture-markets-grid"]')
+      .should('exist')
+      .and('have.class', 'md:grid-cols-2');
+    cy.get('[data-testid="market-accordion-content"]')
       .first()
-      .should('exist');
+      .should('not.be.visible');
+    cy.get('[data-testid="market-accordion-toggle"]').first().click();
+    cy.get('[data-testid="market-accordion-content"]')
+      .first()
+      .should('be.visible');
 
     cy.get('[data-testid="fixture-back-button"]').click();
     cy.url().should('include', '/play');
@@ -347,6 +357,9 @@ describe('Home Betting UX', () => {
     cy.contains('Gamma FC', { timeout: 30000 }).should('be.visible');
     cy.location('search').should('include', 'league=2');
     cy.get('[data-testid="league-pill-2"]').should('exist');
+    cy.then(() => {
+      expect(new Set(leagueOddsRequests)).to.deep.equal(new Set(['2']));
+    });
   });
 
   it('routes from fixture page to home and cleans unrelated params when sidebar league is clicked', () => {

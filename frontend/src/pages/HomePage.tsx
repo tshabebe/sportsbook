@@ -211,13 +211,23 @@ export function HomePage() {
     );
   }, [fixtures]);
 
+  const leagueCountSource = useMemo(
+    () =>
+      allLeaguesQuery.data && allLeaguesQuery.data.length > 0
+        ? allLeaguesQuery.data
+        : preMatchFixtures,
+    [allLeaguesQuery.data, preMatchFixtures],
+  );
+
   const leagueCounts = useMemo(() => {
-    return preMatchFixtures.reduce((map, fixture) => {
+    return leagueCountSource.reduce((map, fixture) => {
       const leagueId = fixture.league.id;
       map.set(leagueId, (map.get(leagueId) ?? 0) + 1);
       return map;
     }, new Map<number, number>());
-  }, [preMatchFixtures]);
+  }, [leagueCountSource]);
+
+  const hasGlobalLeagueCounts = selectedLeagueId === 0 || Boolean(allLeaguesQuery.data?.length);
 
   const updateParam = (
     key: 'league' | 'date' | 'market',
@@ -275,15 +285,14 @@ export function HomePage() {
           >
             {LEAGUES.map((league) => {
               const isActive = selectedLeagueId === league.id;
-              const count =
+              const knownCount =
                 league.id === 0
-                  ? preMatchFixtures.length
-                  : leagueCounts.get(league.id) ?? 0;
-
-              // Find metadata from fixtures if available.
-              // Use allLeaguesQuery.data if available to ensure we see logos for unselected leagues too.
-              const metadataSource = allLeaguesQuery.data && allLeaguesQuery.data.length > 0 ? allLeaguesQuery.data : preMatchFixtures;
-              const metadata = metadataSource?.find(f => f.league.id === league.id)?.league;
+                  ? hasGlobalLeagueCounts
+                    ? leagueCountSource.length
+                    : undefined
+                  : hasGlobalLeagueCounts || selectedLeagueId === league.id
+                    ? leagueCounts.get(league.id) ?? 0
+                    : undefined;
 
 
               return (
@@ -306,15 +315,15 @@ export function HomePage() {
                 >
                   {league.id === 0 ? (
                     <AllLeaguesIcon className={`h-8 w-8 md:h-4 md:w-4 ${isActive ? 'text-black' : 'text-white md:text-current'}`} />
-                  ) : metadata?.logo ? (
+                  ) : league.logo ? (
                     <img
-                      src={metadata.logo}
+                      src={league.logo}
                       alt={league.name}
                       className={`h-8 w-8 md:h-4 md:w-4 object-contain transition-all ${isActive ? 'brightness-0' : 'brightness-0 invert md:filter-none'}`}
                     />
-                  ) : metadata?.flag ? (
+                  ) : league.flag ? (
                     <img
-                      src={metadata.flag}
+                      src={league.flag}
                       alt={league.name}
                       className={`h-8 w-8 md:h-4 md:w-4 object-contain transition-all ${isActive ? 'brightness-0' : 'brightness-0 invert md:filter-none'}`}
                     />
@@ -324,9 +333,11 @@ export function HomePage() {
 
                   <span className="hidden md:block leading-none">{league.id === 0 ? 'All' : league.name}</span>
 
-                  <span className={`hidden md:block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${isActive ? 'bg-black/20' : 'bg-[#1d1d1d]'}`}>
-                    {count}
-                  </span>
+                  {knownCount !== undefined ? (
+                    <span className={`hidden md:block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${isActive ? 'bg-black/20' : 'bg-[#1d1d1d]'}`}>
+                      {knownCount}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

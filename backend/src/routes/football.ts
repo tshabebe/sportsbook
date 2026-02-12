@@ -43,6 +43,5 @@ router.get('/teams', handleProxy('/teams'));
 router.get('/standings', handleProxy('/standings'));
 router.get('/predictions', handleProxy('/predictions'));
 router.get('/injuries', handleProxy('/injuries'));
-router.get('/timezone', handleProxy('/timezone'));
 router.get('/countries', handleProxy('/countries'));
 router.get('/venues', handleProxy('/venues'));

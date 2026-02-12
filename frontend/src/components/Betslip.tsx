@@ -227,7 +227,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
   };
 
   const shareTicket = async (code: string) => {
-    const shareUrl = `${window.location.origin}${window.location.pathname}?share=${code}`;
+    const shareUrl = `${window.location.origin}/play/betslip?share=${encodeURIComponent(code)}`;
     if (navigator.share) {
       try {
         await navigator.share({

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Betslip } from '../components/Betslip';
 import { useBetSlip, type Bet } from '../context/BetSlipContext';
@@ -19,22 +19,23 @@ export function BetSlipPage() {
   const [hydratingCode, setHydratingCode] = useState<string | null>(null);
   const [hydratedCode, setHydratedCode] = useState<string | null>(null);
   const [initialStake, setInitialStake] = useState<number>(10);
-  const loadedCodeRef = useRef<string | null>(null);
+  const shareCode = searchParams.get('share');
+  const legacyBookCode = searchParams.get('book');
+  const recreateCode = String(shareCode ?? legacyBookCode ?? '').trim();
+  const recreateParam = shareCode ? 'share' : legacyBookCode ? 'book' : null;
 
   useEffect(() => {
-    const code = String(searchParams.get('book') ?? '').trim();
-    if (!code || loadedCodeRef.current === code) return;
-    loadedCodeRef.current = code;
+    if (!recreateCode) return;
 
     let cancelled = false;
     queueMicrotask(() => {
       if (cancelled) return;
       setHydrateError(null);
-      setHydratingCode(code);
+      setHydratingCode(recreateCode);
     });
 
     void api
-      .get<RecreateResponse>(`/tickets/${encodeURIComponent(code)}/recreate`)
+      .get<RecreateResponse>(`/tickets/${encodeURIComponent(recreateCode)}/recreate`)
       .then(({ data }) => {
         if (cancelled) return;
         const recreatedBets = Array.isArray(data?.bets) ? data.bets : [];
@@ -47,7 +48,12 @@ export function BetSlipPage() {
         if (Number.isFinite(recreatedStake) && recreatedStake > 0) {
           setInitialStake(recreatedStake);
         }
-        setHydratedCode(data?.bookCode ?? code);
+        setHydratedCode(data?.bookCode ?? recreateCode);
+        if (recreateParam) {
+          const url = new URL(window.location.href);
+          url.searchParams.delete(recreateParam);
+          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+        }
       })
       .catch((error: unknown) => {
         if (cancelled) return;
@@ -61,7 +67,7 @@ export function BetSlipPage() {
     return () => {
       cancelled = true;
     };
-  }, [replaceBetSlip, searchParams]);
+  }, [recreateCode, recreateParam, replaceBetSlip]);
 
   return (
     <div data-testid="betslip-page" className="flex h-full flex-col bg-element-bg">
