@@ -6,6 +6,7 @@ import { Betslip } from "../Betslip";
 import { useState, useEffect } from "react";
 import { useBetSlip } from "../../context/BetSlipContext";
 import { Outlet, useLocation } from "react-router-dom";
+import { getAuthToken } from "../../lib/auth";
 
 export function Layout() {
     // Desktop Layout States
@@ -14,6 +15,7 @@ export function Layout() {
 
     const { isOpen: isMobileBetslipOpen, toggleBetSlip, replaceBetSlip } = useBetSlip();
     const location = useLocation();
+    const isAuthenticated = Boolean(getAuthToken());
 
     // Sharing / Recreate Logic
     useEffect(() => {
@@ -45,13 +47,15 @@ export function Layout() {
 
     return (
         <div className="flex flex-col h-screen bg-app-bg text-text-contrast font-poppins">
-            {/* Desktop Header */}
-            <div className="hidden md:block">
-                <Header onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-            </div>
-
-            {/* Mobile Header */}
-            <MobileHeader />
+            {/* Header is wallet/player-only. Retail/guest flow keeps header removed. */}
+            {isAuthenticated ? (
+                <>
+                    <div className="hidden md:block">
+                        <Header onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+                    </div>
+                    <MobileHeader />
+                </>
+            ) : null}
 
             <div className="flex flex-1 overflow-hidden relative">
                 {/* Sidebar: Desktop Only */}
