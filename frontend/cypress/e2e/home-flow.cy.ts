@@ -268,10 +268,10 @@ describe('Home Betting UX', () => {
 
     cy.get('[data-testid="view-tab-live"]').should('not.exist');
     cy.get('[data-testid="date-filter-trigger"]').should('exist');
-    cy.get('[data-testid="date-filter-trigger"]').click();
+    cy.get('[data-testid="date-filter-trigger"]').click({ force: true });
     cy.contains('In 3 Hours').should('exist');
     cy.contains('Future').should('exist');
-    cy.contains('All Dates').click();
+    cy.contains('All Dates').click({ force: true });
     cy.get('[data-testid="extra-market-trigger"]').should('exist');
     cy.get('aside').first().within(() => {
       cy.contains('Search leagues...').should('not.exist');
@@ -299,12 +299,43 @@ describe('Home Betting UX', () => {
     cy.contains('2.10', { timeout: 30000 }).should('be.visible');
   });
 
+  it('supports desktop drag scrolling on league header pills', () => {
+    cy.visit('/play?league=39');
+    cy.wait('@oddsLeague39', { timeout: 60000 });
+
+    cy.get('[data-testid="league-tabs-scroll"]')
+      .as('leagueTabs')
+      .should(($tabs) => {
+        expect($tabs[0].scrollWidth).to.be.greaterThan($tabs[0].clientWidth);
+        expect($tabs[0].scrollLeft).to.equal(0);
+      });
+
+    cy.get('@leagueTabs').trigger('mousedown', { button: 0, clientX: 700, clientY: 10 });
+    cy.get('@leagueTabs').trigger('mousemove', { clientX: 280, clientY: 10 });
+    cy.get('@leagueTabs').trigger('mouseup', { force: true });
+
+    cy.get('@leagueTabs').should(($tabs) => {
+      expect($tabs[0].scrollLeft).to.be.greaterThan(0);
+    });
+  });
+
   it('keeps selected market/league through navigation and back', () => {
     cy.visit('/play?league=39&market=over_under');
     cy.wait('@oddsLeague39', { timeout: 60000 });
     cy.contains('Alpha FC', { timeout: 20000 }).should('be.visible');
     cy.contains('Alpha FC', { timeout: 20000 }).click();
     cy.url().should('include', '/play/fixture/9001');
+
+    cy.get('[data-testid="fixture-markets-grid"]')
+      .should('have.class', 'grid-cols-1')
+      .and('have.class', 'md:grid-cols-2');
+    cy.get('[data-testid="market-accordion-toggle"]')
+      .first()
+      .should('have.attr', 'aria-expanded', 'false');
+    cy.get('[data-testid="market-accordion-toggle"]').first().click();
+    cy.get('[data-testid="market-accordion-toggle"]')
+      .first()
+      .should('have.attr', 'aria-expanded', 'true');
 
     cy.get('[data-testid="fixture-back-button"]').click();
     cy.url().should('include', '/play');

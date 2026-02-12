@@ -79,25 +79,39 @@ const classifyMarket = (name: string): MarketCategoryKey => {
 
 function MarketAccordion({
   title,
+  testId,
   isOpen,
   onToggle,
   children,
 }: {
   title: string;
+  testId: string;
   isOpen: boolean;
   onToggle: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border-subtle bg-element-bg">
+    <div
+      data-testid={testId}
+      className="overflow-hidden rounded-lg border border-border-subtle bg-element-bg"
+    >
       <button
+        data-testid="market-accordion-toggle"
+        aria-expanded={isOpen}
         onClick={onToggle}
         className="flex w-full items-center justify-between bg-element-hover-bg px-4 py-3 text-left"
       >
         <span className="text-sm font-semibold text-text-contrast">{title}</span>
-        {isOpen ? <ChevronUp className="h-5 w-5 text-text-muted" /> : <ChevronDown className="h-5 w-5 text-text-muted" />}
+        {isOpen ? (
+          <ChevronUp className="h-5 w-5 text-text-muted" />
+        ) : (
+          <ChevronDown className="h-5 w-5 text-text-muted" />
+        )}
       </button>
-      <div className={`${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden transition-all duration-300`}>
+      <div
+        data-testid="market-accordion-content"
+        className={`${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden transition-all duration-300`}
+      >
         <div className="grid grid-cols-2 gap-2 p-3 md:grid-cols-3">
           {children}
         </div>
@@ -261,52 +275,58 @@ export function FixtureMarketsPage() {
         })}
       </div>
 
-      <div className="space-y-3">
+      <div
+        data-testid="fixture-markets-grid"
+        className="grid grid-cols-1 gap-3 md:grid-cols-2"
+      >
         {visibleMarkets.length === 0 ? (
-          <div className="rounded-lg border border-border-subtle bg-element-bg p-6 text-center text-sm text-text-muted">
+          <div className="rounded-lg border border-border-subtle bg-element-bg p-6 text-center text-sm text-text-muted md:col-span-2">
             No markets available in this category.
           </div>
         ) : (
           visibleMarkets.map((market, marketIdx) => {
             const marketKey = `${market.id}-${market.name}-${marketIdx}`;
+            const marketTestId = `market-accordion-${market.id}-${marketIdx}`;
             return (
-            <MarketAccordion
-              key={marketKey}
-              title={market.name}
-              isOpen={openMarkets[marketKey] ?? (activeCategory === 'main' || activeCategory === 'all')}
-              onToggle={() => toggleMarket(marketKey)}
-            >
-              {market.values.map((outcome, idx) => {
-                const selectionId = `${fixture.id}-${marketKey}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;
-                return (
-                  <OutcomeButton
-                    key={`${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`}
-                    label={outcome.value}
-                    odd={outcome.odd}
-                    handicap={outcome.handicap}
-                    isSelected={isSelected(selectionId)}
-                    onClick={() => {
-                      addToBetSlip({
-                        id: selectionId,
-                        fixtureId: fixture.id,
-                        betId: market.id,
-                        value: outcome.value,
-                        odd: Number(outcome.odd),
-                        handicap: outcome.handicap,
-                        bookmakerId: bookmakerId ?? undefined,
-                        fixtureName,
-                        marketName: market.name,
-                        selectionName: `${outcome.value}${outcome.handicap ? ` ${outcome.handicap}` : ''}`,
-                        odds: Number(outcome.odd),
-                        leagueName: league.name,
-                        fixtureDate: fixture.date,
-                      });
-                    }}
-                  />
-                );
-              })}
-            </MarketAccordion>
-          )})
+              <MarketAccordion
+                key={marketKey}
+                testId={marketTestId}
+                title={market.name}
+                isOpen={openMarkets[marketKey] ?? false}
+                onToggle={() => toggleMarket(marketKey)}
+              >
+                {market.values.map((outcome, idx) => {
+                  const selectionId = `${fixture.id}-${marketKey}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;
+                  return (
+                    <OutcomeButton
+                      key={`${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`}
+                      label={outcome.value}
+                      odd={outcome.odd}
+                      handicap={outcome.handicap}
+                      isSelected={isSelected(selectionId)}
+                      onClick={() => {
+                        addToBetSlip({
+                          id: selectionId,
+                          fixtureId: fixture.id,
+                          betId: market.id,
+                          value: outcome.value,
+                          odd: Number(outcome.odd),
+                          handicap: outcome.handicap,
+                          bookmakerId: bookmakerId ?? undefined,
+                          fixtureName,
+                          marketName: market.name,
+                          selectionName: `${outcome.value}${outcome.handicap ? ` ${outcome.handicap}` : ''}`,
+                          odds: Number(outcome.odd),
+                          leagueName: league.name,
+                          fixtureDate: fixture.date,
+                        });
+                      }}
+                    />
+                  );
+                })}
+              </MarketAccordion>
+            );
+          })
         )}
       </div>
     </div>

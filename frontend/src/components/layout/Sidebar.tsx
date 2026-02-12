@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AllLeaguesIcon } from '../ui/AllLeaguesIcon';
 import { useLeagues } from '../../hooks/useLeagues';
 import { useAllLeaguesPreMatchFixtures } from '../../hooks/useFootball';
 
@@ -68,8 +69,8 @@ export function Sidebar() {
         }`}
       >
         <span className="flex items-center gap-3">
-          <span className="flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold">
-            ⚽
+          <span className="flex h-5 w-5 items-center justify-center rounded">
+            <AllLeaguesIcon className="h-4 w-4" />
           </span>
           All Leagues
         </span>
