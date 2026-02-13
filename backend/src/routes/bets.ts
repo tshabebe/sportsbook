@@ -5,6 +5,7 @@ import {
   createRetailBooking,
   createBetWithSelections,
   createRetailTicketForBet,
+  expireRetailTickets,
   getBetWithSelections,
   getExposureForOutcome,
   getRetailBookingByBookCode,
@@ -35,6 +36,7 @@ import {
 } from '../services/marketCatalog';
 import { normalizeBookCodeRoot } from '../services/recreateSlip';
 import { z } from 'zod';
+import { settleRetailTicketIfDecidable } from '../services/retailSettlement';
 
 export const router = Router();
 
@@ -779,6 +781,9 @@ router.get(
     if (!ticketId) {
       throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
     }
+
+    await expireRetailTickets({ ticketId });
+    await settleRetailTicketIfDecidable(ticketId);
 
     const ticket = await getRetailTicketByTicketId(ticketId);
     if (!ticket) {

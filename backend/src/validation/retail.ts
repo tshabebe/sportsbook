@@ -19,6 +19,12 @@ export const retailPayoutSchema = z
   })
   .strict();
 
+export const retailVoidSchema = z
+  .object({
+    voidReference: z.string().min(8).max(128),
+  })
+  .strict();
+
 export const retailListQuerySchema = z
   .object({
     status: z
@@ -70,5 +76,6 @@ export const retailReportQuerySchema = z
 export type RetailerLoginInput = z.infer<typeof retailerLoginSchema>;
 export type RetailTicketParamsInput = z.infer<typeof retailTicketParamsSchema>;
 export type RetailPayoutInput = z.infer<typeof retailPayoutSchema>;
+export type RetailVoidInput = z.infer<typeof retailVoidSchema>;
 export type RetailListQueryInput = z.infer<typeof retailListQuerySchema>;
 export type RetailReportQueryInput = z.infer<typeof retailReportQuerySchema>;

@@ -2,7 +2,7 @@ describe('Retail Dashboard', () => {
   beforeEach(() => {
     cy.viewport(1280, 800);
 
-    cy.intercept('GET', '**/api/retail/my/tickets*', {
+    cy.intercept('GET', '**/retail/my/tickets*', {
       statusCode: 200,
       body: {
         ok: true,
@@ -13,7 +13,7 @@ describe('Retail Dashboard', () => {
       },
     }).as('myTickets');
 
-    cy.intercept('GET', '**/api/retail/my/reports/summary*', {
+    cy.intercept('GET', '**/retail/my/reports/summary*', {
       statusCode: 200,
       body: {
         ok: true,
@@ -36,7 +36,7 @@ describe('Retail Dashboard', () => {
   });
 
   it('loads report summary and ticket desk actions', () => {
-    cy.intercept('GET', '**/api/retail/tickets/11-030686', {
+    cy.intercept('GET', '**/retail/tickets/11-030686', {
       statusCode: 200,
       body: {
         ok: true,
@@ -63,7 +63,7 @@ describe('Retail Dashboard', () => {
       },
     }).as('lookup');
 
-    cy.intercept('GET', '**/api/tickets/11-030686/recreate', {
+    cy.intercept('GET', '**/tickets/11-030686/recreate', {
       statusCode: 200,
       body: {
         ok: true,
@@ -80,7 +80,7 @@ describe('Retail Dashboard', () => {
       },
     }).as('recreate');
 
-    cy.intercept('POST', '**/api/retail/tickets/issue', {
+    cy.intercept('POST', '**/retail/tickets/issue', {
       statusCode: 200,
       body: {
         ok: true,
@@ -106,7 +106,7 @@ describe('Retail Dashboard', () => {
       },
     }).as('issue');
 
-    cy.intercept('GET', '**/api/retail/tickets/22-998877', {
+    cy.intercept('GET', '**/retail/tickets/22-998877', {
       statusCode: 200,
       body: {
         ok: true,

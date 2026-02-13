@@ -161,7 +161,9 @@ describe('retail ticket flow live integration', () => {
         expect(loginTwo.status).toBe(200);
         const tokenTwo = loginTwo.body.token as string;
 
-        const lookupOpen = await request(app).get(`/api/retail/tickets/${openTicketId}`);
+        const lookupOpen = await request(app)
+          .get(`/api/retail/tickets/${openTicketId}`)
+          .set('Authorization', `Bearer ${tokenOne}`);
         expect(lookupOpen.status).toBe(200);
         expect(lookupOpen.body.ticket.status).toBe('open');
 

@@ -2,11 +2,14 @@ import { Router, Request, Response } from 'express';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { HttpError } from '../lib/http';
 import {
+  expireRetailTickets,
   findRetailerByUsername,
   getRetailTicketByTicketId,
+  listRetailSettleableTicketIdsByRetailer,
   listRetailTicketsByRetailer,
   getRetailProfitSummaryByRetailer,
   payoutRetailTicket,
+  voidRetailTicket,
 } from '../services/db';
 import {
   retailerLoginSchema,
@@ -14,12 +17,37 @@ import {
   retailPayoutSchema,
   retailReportQuerySchema,
   retailTicketParamsSchema,
+  retailVoidSchema,
 } from '../validation/retail';
 import { createRetailToken, verifyRetailerPassword } from '../services/retailAuth';
 import { settleRetailTicketIfDecidable } from '../services/retailSettlement';
 import { requireRetailerToken } from './utils';
 
 export const router = Router();
+
+const SETTLEMENT_REFRESH_LIMIT = 80;
+
+const refreshRetailerTicketState = async (input: {
+  retailerId: number;
+  from?: Date;
+  to?: Date;
+}) => {
+  await expireRetailTickets({ retailerId: input.retailerId });
+  const settleableTicketIds = await listRetailSettleableTicketIdsByRetailer({
+    retailerId: input.retailerId,
+    from: input.from,
+    to: input.to,
+    limit: SETTLEMENT_REFRESH_LIMIT,
+  });
+
+  for (const ticketId of settleableTicketIds) {
+    try {
+      await settleRetailTicketIfDecidable(ticketId);
+    } catch (error) {
+      console.error('Failed to refresh retail ticket settlement', { ticketId, error });
+    }
+  }
+};
 
 router.post(
   '/auth/login',
@@ -54,10 +82,21 @@ router.post(
 router.get(
   '/tickets/:ticketId',
   asyncHandler(async (req: Request, res: Response) => {
+    const auth = requireRetailerToken(req);
     const parsed = retailTicketParamsSchema.safeParse(req.params);
     if (!parsed.success) {
       throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
     }
+
+    const initialTicket = await getRetailTicketByTicketId(parsed.data.ticketId);
+    if (!initialTicket) {
+      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    }
+    if (initialTicket.claimedByRetailerId !== auth.retailerId) {
+      throw new HttpError(403, 'TICKET_NOT_OWNED', 'Ticket is owned by another retailer');
+    }
+
+    await expireRetailTickets({ ticketId: parsed.data.ticketId, retailerId: auth.retailerId });
     await settleRetailTicketIfDecidable(parsed.data.ticketId);
 
     const ticket = await getRetailTicketByTicketId(parsed.data.ticketId);
@@ -81,6 +120,15 @@ router.post(
       throw new HttpError(400, 'INVALID_PAYOUT_PAYLOAD', 'Invalid payout payload');
     }
 
+    const existing = await getRetailTicketByTicketId(params.data.ticketId);
+    if (!existing) {
+      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    }
+    if (existing.claimedByRetailerId !== auth.retailerId) {
+      throw new HttpError(403, 'TICKET_NOT_OWNED', 'Ticket is owned by another retailer');
+    }
+
+    await expireRetailTickets({ ticketId: params.data.ticketId, retailerId: auth.retailerId });
     await settleRetailTicketIfDecidable(params.data.ticketId);
 
     const result = await payoutRetailTicket({
@@ -110,6 +158,54 @@ router.post(
   }),
 );
 
+router.post(
+  '/tickets/:ticketId/void',
+  asyncHandler(async (req: Request, res: Response) => {
+    const auth = requireRetailerToken(req);
+    const params = retailTicketParamsSchema.safeParse(req.params);
+    if (!params.success) {
+      throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
+    }
+    const body = retailVoidSchema.safeParse(req.body);
+    if (!body.success) {
+      throw new HttpError(400, 'INVALID_VOID_PAYLOAD', 'Invalid void payload');
+    }
+
+    await expireRetailTickets({ ticketId: params.data.ticketId, retailerId: auth.retailerId });
+
+    const result = await voidRetailTicket({
+      ticketId: params.data.ticketId,
+      retailerId: auth.retailerId,
+      voidReference: body.data.voidReference,
+    });
+
+    if (result.code === 'NOT_FOUND') {
+      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    }
+    if (result.code === 'NOT_OWNER') {
+      throw new HttpError(403, 'TICKET_NOT_OWNED', 'Ticket is owned by another retailer');
+    }
+    if (result.code === 'ALREADY_VOID') {
+      res.json({ ok: true, ticket: result.ticket, idempotent: true });
+      return;
+    }
+    if (result.code === 'ALREADY_PAID') {
+      throw new HttpError(409, 'TICKET_ALREADY_PAID', 'Ticket is already paid');
+    }
+    if (result.code === 'EXPIRED') {
+      throw new HttpError(409, 'TICKET_EXPIRED', 'Ticket is expired');
+    }
+    if (result.code === 'NOT_VOIDABLE') {
+      throw new HttpError(409, 'TICKET_NOT_VOIDABLE', 'Ticket cannot be voided');
+    }
+    if (result.code === 'CONFLICT') {
+      throw new HttpError(409, 'VOID_CONFLICT', 'Ticket void conflict');
+    }
+
+    res.json({ ok: true, ticket: result.ticket });
+  }),
+);
+
 router.get(
   '/my/tickets',
   asyncHandler(async (req: Request, res: Response) => {
@@ -118,6 +214,7 @@ router.get(
     if (!parsed.success) {
       throw new HttpError(400, 'INVALID_QUERY', 'Invalid retail ticket query');
     }
+    await refreshRetailerTicketState({ retailerId: auth.retailerId });
     const tickets = await listRetailTicketsByRetailer(auth.retailerId, parsed.data.status);
     res.json({ ok: true, tickets });
   }),
@@ -135,6 +232,12 @@ router.get(
     const now = new Date();
     const to = parsed.data.to ?? now;
     const from = parsed.data.from ?? new Date(to.getTime() - 1000 * 60 * 60 * 24 * 7);
+
+    await refreshRetailerTicketState({
+      retailerId: auth.retailerId,
+      from,
+      to,
+    });
 
     const summary = await getRetailProfitSummaryByRetailer({
       retailerId: auth.retailerId,

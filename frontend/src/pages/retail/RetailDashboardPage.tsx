@@ -54,6 +54,8 @@ type RetailReportSummary = {
   netProfit: number;
   ticketsCount: number;
   paidTicketsCount: number;
+  outstandingTicketsCount: number;
+  outstandingPayoutAmount: number;
   byStatus: Record<string, number>;
 };
 
@@ -106,6 +108,30 @@ const toNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizeReportSummary = (summary: any): RetailReportSummary | null => {
+  if (!summary || typeof summary !== 'object') return null;
+  return {
+    from: String(summary.from ?? ''),
+    to: String(summary.to ?? ''),
+    totalStake: toNumber(summary.totalStake),
+    totalPaidOut: toNumber(summary.totalPaidOut),
+    netProfit: toNumber(summary.netProfit),
+    ticketsCount: toNumber(summary.ticketsCount),
+    paidTicketsCount: toNumber(summary.paidTicketsCount),
+    outstandingTicketsCount: toNumber(summary.outstandingTicketsCount),
+    outstandingPayoutAmount: toNumber(summary.outstandingPayoutAmount),
+    byStatus:
+      summary.byStatus && typeof summary.byStatus === 'object'
+        ? Object.fromEntries(
+          Object.entries(summary.byStatus).map(([status, count]) => [
+            status,
+            toNumber(count),
+          ]),
+        )
+        : {},
+  };
+};
+
 export function RetailDashboardPage() {
   const [ticket, setTicket] = useState<RetailTicket | null>(null);
   const [recreatedSelections, setRecreatedSelections] = useState<RecreatedSelection[]>([]);
@@ -150,6 +176,10 @@ export function RetailDashboardPage() {
   });
 
   const canPayout = useMemo(() => ticket?.status === 'settled_won_unpaid', [ticket]);
+  const canVoid = useMemo(
+    () => Boolean(ticket && !['paid', 'void', 'expired'].includes(ticket.status)),
+    [ticket],
+  );
 
   const lookupTicket = async (values: LookupForm) => {
     const ticketId = values.ticketId.trim();
@@ -157,7 +187,9 @@ export function RetailDashboardPage() {
     setError(null);
     setMessage(null);
     try {
-      const { data } = await api.get(`/retail/tickets/${ticketId}`);
+      const { data } = await api.get(`/retail/tickets/${ticketId}`, {
+        headers: authHeaders(),
+      });
       const lookedTicket = data.ticket ?? null;
       setTicket(lookedTicket);
       const recreateCode = String(lookedTicket?.sourceBookCode ?? '').trim();
@@ -194,8 +226,32 @@ export function RetailDashboardPage() {
       );
       setTicket((prev) => (prev ? { ...prev, ...data.ticket } : prev));
       setMessage(data.idempotent ? 'Already paid (idempotent)' : 'Payout confirmed');
+      void loadMyTickets();
+      void loadReport();
     } catch (error: unknown) {
       setError(getApiErrorMessage(error, 'Payout failed'));
+    } finally {
+      setLoadingDesk(false);
+    }
+  };
+
+  const voidTicket = async (values: PayoutForm) => {
+    if (!ticket) return;
+    setLoadingDesk(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { data } = await api.post(
+        `/retail/tickets/${ticket.ticketId}/void`,
+        { voidReference: values.payoutReference.trim() },
+        { headers: authHeaders() },
+      );
+      setTicket((prev) => (prev ? { ...prev, ...data.ticket } : prev));
+      setMessage(data.idempotent ? 'Already voided (idempotent)' : 'Ticket voided and refunded');
+      void loadMyTickets();
+      void loadReport();
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, 'Void failed'));
     } finally {
       setLoadingDesk(false);
     }
@@ -245,7 +301,9 @@ export function RetailDashboardPage() {
       const firstTicketId = batch.tickets[0]?.ticketId;
       if (firstTicketId) {
         try {
-          const lookup = await api.get(`/retail/tickets/${firstTicketId}`);
+          const lookup = await api.get(`/retail/tickets/${firstTicketId}`, {
+            headers: authHeaders(),
+          });
           setTicket(lookup.data?.ticket ?? null);
         } catch {
           setTicket(null);
@@ -335,7 +393,7 @@ export function RetailDashboardPage() {
         headers: authHeaders(),
         params,
       });
-      setReport(data.summary ?? null);
+      setReport(normalizeReportSummary(data.summary));
     } catch (loadError: unknown) {
       setReportError(getApiErrorMessage(loadError, 'Failed to load report'));
     } finally {
@@ -476,15 +534,27 @@ export function RetailDashboardPage() {
               <span className="text-text-muted">Created:</span>{' '}
               {ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '-'}
             </p>
+            <p>
+              <span className="text-text-muted">Expires:</span>{' '}
+              {ticket.expiresAt ? new Date(ticket.expiresAt).toLocaleString() : '-'}
+            </p>
+            <p>
+              <span className="text-text-muted">Payout Amount:</span>{' '}
+              {ticket.payoutAmount ? formatCurrency(toNumber(ticket.payoutAmount)) : '-'}
+            </p>
+            <p>
+              <span className="text-text-muted">Paid At:</span>{' '}
+              {ticket.paidAt ? new Date(ticket.paidAt).toLocaleString() : '-'}
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button onPress={printCurrentTicket} isDisabled={loadingDesk} variant="outline" size="sm">
                 Print Ticket
               </Button>
               <TextField>
-                <Label className="sr-only">Payout reference</Label>
+                <Label className="sr-only">Desk reference</Label>
                 <Input
                   {...registerPayout('payoutReference')}
-                  placeholder="Payout reference"
+                  placeholder="Desk reference"
                   className="min-w-52 rounded border border-border-subtle bg-app-bg px-2 py-1.5 text-xs outline-none focus:border-accent-solid"
                 />
               </TextField>
@@ -497,6 +567,16 @@ export function RetailDashboardPage() {
                 size="sm"
               >
                 Confirm Payout
+              </Button>
+              <Button
+                onPress={() => {
+                  void handlePayoutSubmit(voidTicket)();
+                }}
+                isDisabled={!canVoid || loadingDesk}
+                variant="danger"
+                size="sm"
+              >
+                Void & Refund
               </Button>
             </div>
             {payoutErrors.payoutReference ? (
@@ -546,7 +626,7 @@ export function RetailDashboardPage() {
             <p className="text-xs text-text-muted">
               {new Date(report.from).toLocaleString()} to {new Date(report.to).toLocaleString()}
             </p>
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-4">
               <div className="rounded border border-border-subtle p-3">
                 <p className="text-xs text-text-muted">Total Stake</p>
                 <p className="text-lg font-semibold">{formatCurrency(report.totalStake)}</p>
@@ -554,6 +634,12 @@ export function RetailDashboardPage() {
               <div className="rounded border border-border-subtle p-3">
                 <p className="text-xs text-text-muted">Paid Out</p>
                 <p className="text-lg font-semibold">{formatCurrency(report.totalPaidOut)}</p>
+              </div>
+              <div className="rounded border border-border-subtle p-3">
+                <p className="text-xs text-text-muted">Unpaid Liability</p>
+                <p className="text-lg font-semibold text-amber-500">
+                  {formatCurrency(report.outstandingPayoutAmount)}
+                </p>
               </div>
               <div className="rounded border border-border-subtle p-3">
                 <p className="text-xs text-text-muted">Net Profit</p>
@@ -568,6 +654,9 @@ export function RetailDashboardPage() {
               </span>
               <span className="rounded border border-border-subtle px-2 py-1">
                 Paid: {report.paidTicketsCount}
+              </span>
+              <span className="rounded border border-border-subtle px-2 py-1">
+                Unpaid: {report.outstandingTicketsCount}
               </span>
               {Object.entries(report.byStatus).map(([status, count]) => (
                 <span key={status} className="rounded border border-border-subtle px-2 py-1">
