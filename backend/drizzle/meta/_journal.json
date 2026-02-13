@@ -57,6 +57,13 @@
       "when": 1770980151368,
       "tag": "0007_solid_landau",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770992736640,
+      "tag": "0008_even_azazel",
+      "breakpoints": true
     }
   ]
 }

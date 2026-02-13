@@ -1,6 +1,7 @@
 import type { Request } from 'express';
 import { HttpError } from '../lib/http';
 import { verifyRetailToken } from '../services/retailAuth';
+import { verifyAdminToken } from '../services/adminAuth';
 
 export const normalizeQuery = (
   query: Request['query'],
@@ -36,4 +37,11 @@ export const requireRetailerToken = (
 ): { retailerId: number; username: string; exp: number } => {
   const token = requireBearerToken(req);
   return verifyRetailToken(token);
+};
+
+export const requireAdminToken = (
+  req: Request,
+): { role: 'admin'; username: string; exp: number } => {
+  const token = requireBearerToken(req);
+  return verifyAdminToken(token);
 };

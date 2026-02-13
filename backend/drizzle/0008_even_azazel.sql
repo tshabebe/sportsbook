@@ -1,0 +1,1 @@
+DROP TABLE "retail_bookings" CASCADE;

@@ -26,6 +26,14 @@ const required = (value: string | undefined, key: string): string => {
   return value;
 };
 
+const retailAuthSecret = required(
+  process.env.RETAIL_AUTH_SECRET ?? process.env.JWT_SECRET,
+  'RETAIL_AUTH_SECRET',
+);
+const adminPasswordRaw = process.env.ADMIN_PASSWORD_HASH
+  ? process.env.ADMIN_PASSWORD_HASH
+  : `plain:${process.env.ADMIN_PASSWORD ?? 'admin123'}`;
+
 export const config = {
   port: toInt(process.env.PORT, 3001),
   apiFootballBaseUrl:
@@ -47,10 +55,11 @@ export const config = {
     process.env.PASS_KEY ?? process.env.WALLET_API_KEY,
     'PASS_KEY',
   ),
-  retailAuthSecret: required(
-    process.env.RETAIL_AUTH_SECRET ?? process.env.JWT_SECRET,
-    'RETAIL_AUTH_SECRET',
-  ),
+  retailAuthSecret,
+  adminAuthSecret: process.env.ADMIN_AUTH_SECRET ?? retailAuthSecret,
+  adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
+  adminPasswordHash: adminPasswordRaw,
+  retailBookingTtlSeconds: toInt(process.env.RETAIL_BOOKING_TTL_SECONDS, 60 * 60 * 72),
   walletGameName: process.env.WALLET_GAME_NAME ?? 'Sportsbook',
   cacheTtlSeconds: {
     default: toInt(process.env.CACHE_TTL_DEFAULT, 60),

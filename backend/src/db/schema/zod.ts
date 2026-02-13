@@ -15,11 +15,6 @@ export {
   retailersUpdateSchema,
 } from './retailers';
 export {
-  retailBookingsInsertSchema,
-  retailBookingsSelectSchema,
-  retailBookingsUpdateSchema,
-} from './retailBookings';
-export {
   retailTicketsInsertSchema,
   retailTicketsSelectSchema,
   retailTicketsUpdateSchema,

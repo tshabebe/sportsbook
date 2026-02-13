@@ -4,6 +4,7 @@ import { router as footballRouter } from './routes/football';
 import { router as betsRouter } from './routes/bets';
 import { router as walletRouter } from './routes/wallet';
 import { router as retailRouter } from './routes/retail';
+import { router as adminRouter } from './routes/admin';
 import { requestLogger } from './middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import { cacheHealth } from './services/cache';
@@ -56,6 +57,7 @@ export const createApp = (): Express => {
   app.use('/api', betsRouter);
   app.use('/api/wallet', walletRouter);
   app.use('/api/retail', retailRouter);
+  app.use('/api/admin', adminRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

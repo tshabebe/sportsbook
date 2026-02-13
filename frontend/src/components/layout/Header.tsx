@@ -45,6 +45,7 @@ export function Header({ onMenuClick }: HeaderProps) {
               onAction={(key) => {
                 if (key === 'track') navigate('/play/track');
                 if (key === 'retail') navigate('/retail/login');
+                if (key === 'admin') navigate('/admin/login');
               }}
             >
               <MenuItem id="track" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
@@ -52,6 +53,9 @@ export function Header({ onMenuClick }: HeaderProps) {
               </MenuItem>
               <MenuItem id="retail" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
                 Retail Desk
+              </MenuItem>
+              <MenuItem id="admin" className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg">
+                Admin Console
               </MenuItem>
             </AriaMenu>
           </Popover>

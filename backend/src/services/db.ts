@@ -15,15 +15,12 @@ import {
 } from '../db/schema/betSelections';
 import {
   retailers,
+  retailersInsertSchema,
   retailersSelectSchema,
+  retailersUpdateSchema,
+  type DbRetailerInsert,
   type DbRetailerSelect,
 } from '../db/schema/retailers';
-import {
-  retailBookings,
-  retailBookingsInsertSchema,
-  retailBookingsSelectSchema,
-  type DbRetailBookingSelect,
-} from '../db/schema/retailBookings';
 import {
   retailTickets,
   retailTicketsInsertSchema,
@@ -216,28 +213,199 @@ export const findRetailerByUsername = async (
   return retailersSelectSchema.parse(row);
 };
 
-export const createRetailBooking = async (input: {
-  bookCode: string;
-  slipJson: unknown;
-}): Promise<DbRetailBookingSelect> => {
-  const row = retailBookingsInsertSchema.parse({
-    bookCode: input.bookCode,
-    slipJson: input.slipJson,
-  });
-  const [inserted] = await db.insert(retailBookings).values(row).returning();
-  return retailBookingsSelectSchema.parse(inserted);
-};
-
-export const getRetailBookingByBookCode = async (
-  bookCode: string,
-): Promise<DbRetailBookingSelect | null> => {
+export const getRetailerById = async (
+  retailerId: number,
+): Promise<DbRetailerSelect | null> => {
   const [row] = await db
     .select()
-    .from(retailBookings)
-    .where(eq(retailBookings.bookCode, bookCode))
+    .from(retailers)
+    .where(eq(retailers.id, retailerId))
     .limit(1);
   if (!row) return null;
-  return retailBookingsSelectSchema.parse(row);
+  return retailersSelectSchema.parse(row);
+};
+
+export const listRetailers = async (): Promise<DbRetailerSelect[]> => {
+  const rows = await db.select().from(retailers).orderBy(desc(retailers.id));
+  return rows.map((row) => retailersSelectSchema.parse(row));
+};
+
+export const createRetailer = async (input: {
+  name: string;
+  username: string;
+  passwordHash: string;
+  isActive?: boolean;
+}): Promise<DbRetailerSelect> => {
+  const retailerRow: DbRetailerInsert = retailersInsertSchema.parse({
+    name: input.name,
+    username: input.username,
+    passwordHash: input.passwordHash,
+    isActive: input.isActive ?? true,
+  });
+  const [inserted] = await db.insert(retailers).values(retailerRow).returning();
+  return retailersSelectSchema.parse(inserted);
+};
+
+export const updateRetailerPasswordHash = async (
+  retailerId: number,
+  passwordHash: string,
+): Promise<DbRetailerSelect | null> => {
+  const [updated] = await db
+    .update(retailers)
+    .set(retailersUpdateSchema.parse({ passwordHash }))
+    .where(eq(retailers.id, retailerId))
+    .returning();
+  return updated ? retailersSelectSchema.parse(updated) : null;
+};
+
+export const updateRetailerActiveStatus = async (
+  retailerId: number,
+  isActive: boolean,
+): Promise<DbRetailerSelect | null> => {
+  const [updated] = await db
+    .update(retailers)
+    .set(retailersUpdateSchema.parse({ isActive }))
+    .where(eq(retailers.id, retailerId))
+    .returning();
+  return updated ? retailersSelectSchema.parse(updated) : null;
+};
+
+export type RetailerProfitSummary = {
+  retailerId: number;
+  name: string;
+  username: string;
+  isActive: boolean;
+  totalStake: number;
+  totalPaidOut: number;
+  outstandingPayoutAmount: number;
+  ticketsCount: number;
+  paidTicketsCount: number;
+  outstandingTicketsCount: number;
+  netProfit: number;
+};
+
+export const listRetailersWithProfitSummary = async (input: {
+  from: Date;
+  to: Date;
+}): Promise<RetailerProfitSummary[]> => {
+  const retailersList = await listRetailers();
+
+  const salesRows = await db
+    .select({
+      retailerId: retailTickets.claimedByRetailerId,
+      totalStake: sql<string>`coalesce(sum(${bets.stake}), 0)`,
+      ticketsCount: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .innerJoin(bets, eq(retailTickets.betId, bets.id))
+    .where(
+      and(
+        sql`${retailTickets.claimedByRetailerId} is not null`,
+        sql`${retailTickets.createdAt} >= ${input.from}`,
+        sql`${retailTickets.createdAt} <= ${input.to}`,
+      ),
+    )
+    .groupBy(retailTickets.claimedByRetailerId);
+
+  const payoutRows = await db
+    .select({
+      retailerId: retailTickets.paidByRetailerId,
+      totalPaidOut: sql<string>`coalesce(sum(${retailTickets.payoutAmount}), 0)`,
+      paidTicketsCount: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .where(
+      and(
+        sql`${retailTickets.paidByRetailerId} is not null`,
+        inArray(retailTickets.status, ['paid', 'void']),
+        sql`${retailTickets.paidAt} is not null`,
+        sql`${retailTickets.paidAt} >= ${input.from}`,
+        sql`${retailTickets.paidAt} <= ${input.to}`,
+      ),
+    )
+    .groupBy(retailTickets.paidByRetailerId);
+
+  const outstandingRows = await db
+    .select({
+      retailerId: retailTickets.claimedByRetailerId,
+      outstandingPayoutAmount: sql<string>`coalesce(sum(${retailTickets.payoutAmount}), 0)`,
+      outstandingTicketsCount: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .where(
+      and(
+        sql`${retailTickets.claimedByRetailerId} is not null`,
+        eq(retailTickets.status, 'settled_won_unpaid'),
+        sql`${retailTickets.createdAt} >= ${input.from}`,
+        sql`${retailTickets.createdAt} <= ${input.to}`,
+      ),
+    )
+    .groupBy(retailTickets.claimedByRetailerId);
+
+  const salesByRetailer = new Map<number, { totalStake: number; ticketsCount: number }>();
+  const payoutsByRetailer = new Map<
+    number,
+    { totalPaidOut: number; paidTicketsCount: number }
+  >();
+  const outstandingByRetailer = new Map<
+    number,
+    { outstandingPayoutAmount: number; outstandingTicketsCount: number }
+  >();
+
+  for (const row of salesRows) {
+    const retailerId = Number(row.retailerId);
+    if (!Number.isFinite(retailerId) || retailerId <= 0) continue;
+    salesByRetailer.set(retailerId, {
+      totalStake: Number(toNumeric(row.totalStake).toFixed(2)),
+      ticketsCount: Number(row.ticketsCount ?? 0),
+    });
+  }
+
+  for (const row of payoutRows) {
+    const retailerId = Number(row.retailerId);
+    if (!Number.isFinite(retailerId) || retailerId <= 0) continue;
+    payoutsByRetailer.set(retailerId, {
+      totalPaidOut: Number(toNumeric(row.totalPaidOut).toFixed(2)),
+      paidTicketsCount: Number(row.paidTicketsCount ?? 0),
+    });
+  }
+
+  for (const row of outstandingRows) {
+    const retailerId = Number(row.retailerId);
+    if (!Number.isFinite(retailerId) || retailerId <= 0) continue;
+    outstandingByRetailer.set(retailerId, {
+      outstandingPayoutAmount: Number(toNumeric(row.outstandingPayoutAmount).toFixed(2)),
+      outstandingTicketsCount: Number(row.outstandingTicketsCount ?? 0),
+    });
+  }
+
+  return retailersList.map((retailer) => {
+    const sales = salesByRetailer.get(retailer.id) ?? {
+      totalStake: 0,
+      ticketsCount: 0,
+    };
+    const payouts = payoutsByRetailer.get(retailer.id) ?? {
+      totalPaidOut: 0,
+      paidTicketsCount: 0,
+    };
+    const outstanding = outstandingByRetailer.get(retailer.id) ?? {
+      outstandingPayoutAmount: 0,
+      outstandingTicketsCount: 0,
+    };
+    return {
+      retailerId: retailer.id,
+      name: retailer.name,
+      username: retailer.username,
+      isActive: retailer.isActive,
+      totalStake: sales.totalStake,
+      totalPaidOut: payouts.totalPaidOut,
+      outstandingPayoutAmount: outstanding.outstandingPayoutAmount,
+      ticketsCount: sales.ticketsCount,
+      paidTicketsCount: payouts.paidTicketsCount,
+      outstandingTicketsCount: outstanding.outstandingTicketsCount,
+      netProfit: Number((sales.totalStake - payouts.totalPaidOut).toFixed(2)),
+    };
+  });
 };
 
 export const createRetailTicketForBet = async (input: {

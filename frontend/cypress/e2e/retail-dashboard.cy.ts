@@ -63,23 +63,6 @@ describe('Retail Dashboard', () => {
       },
     }).as('lookup');
 
-    cy.intercept('GET', '**/tickets/11-030686/recreate', {
-      statusCode: 200,
-      body: {
-        ok: true,
-        bets: [
-          {
-            id: '1001-1-Home',
-            fixtureName: 'Arsenal vs Chelsea',
-            marketName: '1X2',
-            selectionName: 'Home',
-            odds: 2.1,
-            fixtureDate: '2026-02-07T15:00:00.000Z',
-          },
-        ],
-      },
-    }).as('recreate');
-
     cy.intercept('POST', '**/retail/tickets/issue', {
       statusCode: 200,
       body: {
@@ -133,7 +116,24 @@ describe('Retail Dashboard', () => {
       },
     }).as('lookupIssued');
 
-    cy.visit('/retail/dashboard', {
+    cy.intercept('GET', '**/tickets/11-030686/recreate', {
+      statusCode: 200,
+      body: {
+        ok: true,
+        bets: [
+          {
+            id: '1001-1-Home',
+            fixtureName: 'Arsenal vs Chelsea',
+            marketName: '1X2',
+            selectionName: 'Home',
+            odds: 2.1,
+            fixtureDate: '2026-02-07T15:00:00.000Z',
+          },
+        ],
+      },
+    }).as('recreate');
+
+    cy.visit('/retail/dashboard?tab=work', {
       onBeforeLoad(win) {
         win.localStorage.setItem('retailAuthToken', 'retail-token-test');
         const popup = {
@@ -150,27 +150,26 @@ describe('Retail Dashboard', () => {
       },
     });
 
+    cy.get('input[placeholder="Enter book code"]').type('11-030686');
+    cy.contains('button', 'Issue').click();
+    cy.wait('@issue', { timeout: 20000 });
+    cy.wait('@lookupIssued', { timeout: 20000 });
+    cy.wait('@recreate', { timeout: 20000 });
+    cy.contains('22-998877', { timeout: 20000 }).should('be.visible');
+
+    cy.get('input[placeholder="Enter ticket ID"]').type('11-030686', { force: true });
+    cy.contains('button', 'Lookup').click();
+
+    cy.wait('@lookup', { timeout: 20000 });
+    cy.contains('Ticket loaded', { timeout: 20000 }).should('be.visible');
+
+    cy.contains('a', 'Data').click();
     cy.wait('@myTickets', { timeout: 20000 });
     cy.wait('@report', { timeout: 20000 });
-
-    cy.contains('Retail Report', { timeout: 20000 }).should('be.visible');
+    cy.contains('Report', { timeout: 20000 }).should('be.visible');
     cy.contains('Total Stake').parent().contains('Br100.00');
     cy.contains('Net Profit').parent().contains('Br70.00');
     cy.contains('Tickets: 3').should('be.visible');
     cy.contains('Paid: 1').should('be.visible');
-
-    cy.get('input[placeholder="Enter book code to issue ticket"]').type('11-030686');
-    cy.contains('button', 'Issue Ticket').click();
-    cy.wait('@issue', { timeout: 20000 });
-    cy.wait('@lookupIssued', { timeout: 20000 });
-    cy.contains('Issued Batch:').parent().contains('22-998877');
-
-    cy.get('input[placeholder="Enter ticket ID"]').type('11-030686');
-    cy.contains('button', 'Lookup').click();
-
-    cy.wait('@lookup', { timeout: 20000 });
-    cy.wait('@recreate', { timeout: 20000 });
-    cy.contains('Ticket loaded', { timeout: 20000 }).should('be.visible');
-    cy.contains('button', 'Print Ticket', { timeout: 20000 }).should('be.visible');
   });
 });

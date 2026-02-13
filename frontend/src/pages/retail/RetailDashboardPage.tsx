@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Input, Label, TextField } from 'react-aria-components';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
 import { formatCurrency } from '../../config/currency';
 import { api } from '../../lib/api';
@@ -66,6 +67,27 @@ type IssuedBatch = {
   tickets: Array<{ ticketId: string; status: string }>;
 };
 
+type ToastKind = 'success' | 'error' | 'info';
+
+type DeskToast = {
+  id: number;
+  kind: ToastKind;
+  title: string;
+  detail?: string;
+};
+
+type ReportPreset = 'today' | 'tomorrow' | 'this_week' | 'last_7_days' | 'this_month' | 'custom';
+type TicketSort = 'newest' | 'oldest' | 'status';
+
+const REPORT_PRESET_OPTIONS: Array<{ value: ReportPreset; label: string }> = [
+  { value: 'today', label: 'Today' },
+  { value: 'tomorrow', label: 'Tomorrow' },
+  { value: 'this_week', label: 'This Week' },
+  { value: 'last_7_days', label: 'Last 7 Days' },
+  { value: 'this_month', label: 'This Month' },
+  { value: 'custom', label: 'Custom Range' },
+];
+
 const authHeaders = () => {
   const token = getRetailToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -84,6 +106,7 @@ const payoutSchema = z.object({
     .min(8, 'Payout reference must be at least 8 characters')
     .max(128, 'Payout reference is too long'),
 });
+
 const issueSchema = z.object({
   bookCode: z
     .string()
@@ -106,6 +129,46 @@ const toRangeDateIso = (value: string, endOfDay: boolean): string => {
 const toNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const startOfDay = (date: Date): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+
+const endOfDay = (date: Date): Date =>
+  new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+
+const formatDateTime = (value?: string | null): string => {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '-';
+  return parsed.toLocaleString();
+};
+
+const formatStatusLabel = (status: string): string => {
+  if (!status) return '-';
+  return status
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const statusBadgeClass = (status?: string): string => {
+  switch (status) {
+    case 'paid':
+      return 'border-green-500/40 bg-green-500/10 text-green-500';
+    case 'settled_won_unpaid':
+      return 'border-amber-500/40 bg-amber-500/10 text-amber-500';
+    case 'settled_lost':
+    case 'expired':
+      return 'border-red-500/40 bg-red-500/10 text-red-500';
+    case 'claimed':
+      return 'border-blue-500/40 bg-blue-500/10 text-blue-500';
+    case 'void':
+      return 'border-zinc-500/40 bg-zinc-500/10 text-zinc-300';
+    default:
+      return 'border-border-subtle bg-element-hover-bg text-text-muted';
+  }
 };
 
 const normalizeReportSummary = (summary: any): RetailReportSummary | null => {
@@ -132,24 +195,61 @@ const normalizeReportSummary = (summary: any): RetailReportSummary | null => {
   };
 };
 
+const resolvePresetRange = (preset: Exclude<ReportPreset, 'custom'>, now: Date) => {
+  if (preset === 'today') {
+    return { from: startOfDay(now), to: endOfDay(now) };
+  }
+
+  if (preset === 'tomorrow') {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return { from: startOfDay(tomorrow), to: endOfDay(tomorrow) };
+  }
+
+  if (preset === 'this_week') {
+    const start = startOfDay(new Date(now));
+    const day = start.getDay();
+    const diffToMonday = (day + 6) % 7;
+    start.setDate(start.getDate() - diffToMonday);
+    const end = endOfDay(new Date(start));
+    end.setDate(start.getDate() + 6);
+    return { from: start, to: end };
+  }
+
+  if (preset === 'this_month') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { from: start, to: end };
+  }
+
+  const start = startOfDay(new Date(now));
+  start.setDate(start.getDate() - 6);
+  return { from: start, to: endOfDay(now) };
+};
+
+const defaultRange = resolvePresetRange('today', new Date());
+
 export function RetailDashboardPage() {
   const [ticket, setTicket] = useState<RetailTicket | null>(null);
-  const [recreatedSelections, setRecreatedSelections] = useState<RecreatedSelection[]>([]);
   const [myTickets, setMyTickets] = useState<RetailTicket[]>([]);
   const [issuedBatch, setIssuedBatch] = useState<IssuedBatch | null>(null);
   const [report, setReport] = useState<RetailReportSummary | null>(null);
-  const [reportFrom, setReportFrom] = useState(() => {
-    const now = new Date();
-    const from = new Date(now.getTime() - 1000 * 60 * 60 * 24 * 7);
-    return toDateInputValue(from);
-  });
-  const [reportTo, setReportTo] = useState(() => toDateInputValue(new Date()));
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [reportPreset, setReportPreset] = useState<ReportPreset>('today');
+  const [reportFrom, setReportFrom] = useState(() => toDateInputValue(defaultRange.from));
+  const [reportTo, setReportTo] = useState(() => toDateInputValue(defaultRange.to));
+  const [ticketSort, setTicketSort] = useState<TicketSort>('newest');
+  const [deskError, setDeskError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [ticketsError, setTicketsError] = useState<string | null>(null);
   const [loadingDesk, setLoadingDesk] = useState(false);
   const [loadingTickets, setLoadingTickets] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
+  const [hasLoadedTickets, setHasLoadedTickets] = useState(false);
+  const [hasLoadedReport, setHasLoadedReport] = useState(false);
+  const [toasts, setToasts] = useState<DeskToast[]>([]);
+  const toastIdRef = useRef(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const {
     register: registerLookup,
     handleSubmit: handleLookupSubmit,
@@ -158,6 +258,7 @@ export function RetailDashboardPage() {
     resolver: zodResolver(lookupSchema),
     defaultValues: { ticketId: '' },
   });
+
   const {
     register: registerPayout,
     handleSubmit: handlePayoutSubmit,
@@ -166,6 +267,7 @@ export function RetailDashboardPage() {
     resolver: zodResolver(payoutSchema),
     defaultValues: { payoutReference: '' },
   });
+
   const {
     register: registerIssue,
     handleSubmit: handleIssueSubmit,
@@ -176,38 +278,115 @@ export function RetailDashboardPage() {
   });
 
   const canPayout = useMemo(() => ticket?.status === 'settled_won_unpaid', [ticket]);
-  const canVoid = useMemo(
-    () => Boolean(ticket && !['paid', 'void', 'expired'].includes(ticket.status)),
-    [ticket],
+  const activeTab: 'work' | 'data' = searchParams.get('tab') === 'data' ? 'data' : 'work';
+
+  const setActiveTab = useCallback(
+    (tab: 'work' | 'data') => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('tab', tab);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
   );
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }, []);
+
+  const pushToast = useCallback(
+    (kind: ToastKind, title: string, detail?: string) => {
+      const id = toastIdRef.current++;
+      setToasts((prev) => [...prev, { id, kind, title, detail }].slice(-4));
+      window.setTimeout(() => {
+        dismissToast(id);
+      }, 4500);
+    },
+    [dismissToast],
+  );
+
+  const resolveActiveReportRange = useCallback(() => {
+    if (reportPreset === 'custom') {
+      return {
+        fromIso: toRangeDateIso(reportFrom, false),
+        toIso: toRangeDateIso(reportTo, true),
+      };
+    }
+
+    const range = resolvePresetRange(reportPreset, new Date());
+    return {
+      fromIso: range.from.toISOString(),
+      toIso: range.to.toISOString(),
+    };
+  }, [reportPreset, reportFrom, reportTo]);
+
+  const loadReport = useCallback(async (options?: { silent?: boolean; fromIso?: string; toIso?: string }) => {
+    setLoadingReport(true);
+    setReportError(null);
+
+    const range =
+      options?.fromIso && options?.toIso
+        ? { fromIso: options.fromIso, toIso: options.toIso }
+        : resolveActiveReportRange();
+
+    try {
+      const { data } = await api.get('/retail/my/reports/summary', {
+        headers: authHeaders(),
+        params: {
+          from: range.fromIso,
+          to: range.toIso,
+        },
+      });
+      setReport(normalizeReportSummary(data.summary));
+    } catch (loadError: unknown) {
+      const message = getApiErrorMessage(loadError, 'Failed to load report');
+      setReportError(message);
+      if (!options?.silent) {
+        pushToast('error', 'Report failed', message);
+      }
+    } finally {
+      setHasLoadedReport(true);
+      setLoadingReport(false);
+    }
+  }, [pushToast, resolveActiveReportRange]);
+
+  const loadMyTickets = useCallback(async (options?: { silent?: boolean }) => {
+    setLoadingTickets(true);
+    setTicketsError(null);
+    try {
+      const { data } = await api.get('/retail/my/tickets', { headers: authHeaders() });
+      setMyTickets(data.tickets ?? []);
+    } catch (error: unknown) {
+      const message = getApiErrorMessage(error, 'Failed to load tickets');
+      setTicketsError(message);
+      if (!options?.silent) {
+        pushToast('error', 'Ticket list failed', message);
+      }
+    } finally {
+      setHasLoadedTickets(true);
+      setLoadingTickets(false);
+    }
+  }, [pushToast]);
 
   const lookupTicket = async (values: LookupForm) => {
     const ticketId = values.ticketId.trim();
     setLoadingDesk(true);
-    setError(null);
-    setMessage(null);
+    setDeskError(null);
     try {
       const { data } = await api.get(`/retail/tickets/${ticketId}`, {
         headers: authHeaders(),
       });
-      const lookedTicket = data.ticket ?? null;
-      setTicket(lookedTicket);
-      const recreateCode = String(lookedTicket?.sourceBookCode ?? '').trim();
-      if (recreateCode) {
-        try {
-          const recreate = await api.get(`/tickets/${encodeURIComponent(recreateCode)}/recreate`);
-          setRecreatedSelections(Array.isArray(recreate.data?.bets) ? recreate.data.bets : []);
-        } catch {
-          setRecreatedSelections([]);
-        }
-      } else {
-        setRecreatedSelections([]);
-      }
-      setMessage('Ticket loaded');
+      setTicket(data.ticket ?? null);
+      pushToast('success', 'Ticket loaded', ticketId);
     } catch (error: unknown) {
       setTicket(null);
-      setRecreatedSelections([]);
-      setError(getApiErrorMessage(error, 'Failed to lookup ticket'));
+      const message = getApiErrorMessage(error, 'Failed to lookup ticket');
+      setDeskError(message);
+      pushToast('error', 'Lookup failed', message);
     } finally {
       setLoadingDesk(false);
     }
@@ -216,8 +395,7 @@ export function RetailDashboardPage() {
   const payoutTicket = async (values: PayoutForm) => {
     if (!ticket) return;
     setLoadingDesk(true);
-    setError(null);
-    setMessage(null);
+    setDeskError(null);
     try {
       const { data } = await api.post(
         `/retail/tickets/${ticket.ticketId}/payout`,
@@ -225,55 +403,25 @@ export function RetailDashboardPage() {
         { headers: authHeaders() },
       );
       setTicket((prev) => (prev ? { ...prev, ...data.ticket } : prev));
-      setMessage(data.idempotent ? 'Already paid (idempotent)' : 'Payout confirmed');
-      void loadMyTickets();
-      void loadReport();
-    } catch (error: unknown) {
-      setError(getApiErrorMessage(error, 'Payout failed'));
-    } finally {
-      setLoadingDesk(false);
-    }
-  };
-
-  const voidTicket = async (values: PayoutForm) => {
-    if (!ticket) return;
-    setLoadingDesk(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const { data } = await api.post(
-        `/retail/tickets/${ticket.ticketId}/void`,
-        { voidReference: values.payoutReference.trim() },
-        { headers: authHeaders() },
+      pushToast(
+        'success',
+        data.idempotent ? 'Payout already completed' : 'Payout confirmed',
+        ticket.ticketId,
       );
-      setTicket((prev) => (prev ? { ...prev, ...data.ticket } : prev));
-      setMessage(data.idempotent ? 'Already voided (idempotent)' : 'Ticket voided and refunded');
-      void loadMyTickets();
-      void loadReport();
+      void loadMyTickets({ silent: true });
+      void loadReport({ silent: true });
     } catch (error: unknown) {
-      setError(getApiErrorMessage(error, 'Void failed'));
+      const message = getApiErrorMessage(error, 'Payout failed');
+      setDeskError(message);
+      pushToast('error', 'Payout failed', message);
     } finally {
       setLoadingDesk(false);
-    }
-  };
-
-  const loadMyTickets = async () => {
-    setLoadingTickets(true);
-    setError(null);
-    try {
-      const { data } = await api.get('/retail/my/tickets', { headers: authHeaders() });
-      setMyTickets(data.tickets ?? []);
-    } catch (error: unknown) {
-      setError(getApiErrorMessage(error, 'Failed to load tickets'));
-    } finally {
-      setLoadingTickets(false);
     }
   };
 
   const issueTicketFromBookCode = async (values: IssueForm) => {
     setLoadingDesk(true);
-    setError(null);
-    setMessage(null);
+    setDeskError(null);
     try {
       const { data } = await api.post(
         '/retail/tickets/issue',
@@ -282,9 +430,9 @@ export function RetailDashboardPage() {
       );
 
       const tickets = Array.isArray(data?.tickets)
-        ? data.tickets.map((ticket: any) => ({
-          ticketId: String(ticket?.ticketId ?? ''),
-          status: String(ticket?.status ?? 'claimed'),
+        ? data.tickets.map((issued: any) => ({
+          ticketId: String(issued?.ticketId ?? ''),
+          status: String(issued?.status ?? 'claimed'),
         }))
         : [];
 
@@ -296,7 +444,11 @@ export function RetailDashboardPage() {
       };
 
       setIssuedBatch(batch);
-      setMessage(`Issued ticket batch ${batch.ticketBatchId || '(unknown id)'}`);
+      pushToast(
+        'success',
+        'Ticket issued',
+        batch.ticketBatchId || batch.tickets[0]?.ticketId || batch.sourceBookCode,
+      );
 
       const firstTicketId = batch.tickets[0]?.ticketId;
       if (firstTicketId) {
@@ -314,10 +466,8 @@ export function RetailDashboardPage() {
       try {
         const recreate = await api.get(`/tickets/${encodeURIComponent(batch.sourceBookCode)}/recreate`);
         recreatedForPrint = Array.isArray(recreate.data?.bets) ? recreate.data.bets : [];
-        setRecreatedSelections(recreatedForPrint);
       } catch {
         recreatedForPrint = [];
-        setRecreatedSelections([]);
       }
 
       const firstBet = Array.isArray(data?.bets) ? data.bets[0] : null;
@@ -335,6 +485,7 @@ export function RetailDashboardPage() {
             odds: toNumber(selection?.odd),
           }))
           : [];
+
         const recreatedSelectionsForPrint = recreatedForPrint.map((selection) => ({
           fixtureName: selection.fixtureName,
           marketName: selection.marketName,
@@ -342,10 +493,12 @@ export function RetailDashboardPage() {
           odds: toNumber(selection.odds),
           fixtureDate: selection.fixtureDate,
         }));
+
         const selectionsToPrint =
           recreatedSelectionsForPrint.length > 0
             ? recreatedSelectionsForPrint
             : fallbackSelections;
+
         const stakeValue = toNumber(firstBet?.stake ?? data?.totalStake);
         const potentialPayout =
           selectionsToPrint.length > 0
@@ -367,330 +520,407 @@ export function RetailDashboardPage() {
         });
 
         if (!printed) {
-          setError('Popup blocked. Allow popups to print ticket.');
+          pushToast('info', 'Print blocked', 'Allow popups to print the ticket.');
         }
       }
 
-      void loadMyTickets();
-      void loadReport();
+      void loadMyTickets({ silent: true });
+      void loadReport({ silent: true });
     } catch (issueError: unknown) {
       setIssuedBatch(null);
-      setError(getApiErrorMessage(issueError, 'Failed to issue ticket from book code'));
+      const rawMessage = getApiErrorMessage(issueError, 'Failed to issue ticket from book code');
+      const message = /book code not found/i.test(rawMessage)
+        ? 'Book code expired or not found. Ask player to re-book.'
+        : rawMessage;
+      setDeskError(message);
+      pushToast('error', 'Issue failed', message);
     } finally {
       setLoadingDesk(false);
     }
   };
 
-  const loadReport = async () => {
-    setLoadingReport(true);
-    setReportError(null);
-    try {
-      const params = {
-        from: toRangeDateIso(reportFrom, false),
-        to: toRangeDateIso(reportTo, true),
-      };
-      const { data } = await api.get('/retail/my/reports/summary', {
-        headers: authHeaders(),
-        params,
-      });
-      setReport(normalizeReportSummary(data.summary));
-    } catch (loadError: unknown) {
-      setReportError(getApiErrorMessage(loadError, 'Failed to load report'));
-    } finally {
-      setLoadingReport(false);
+  const sortedTickets = useMemo(() => {
+    const list = [...myTickets];
+    if (ticketSort === 'status') {
+      return list.sort((a, b) => a.status.localeCompare(b.status));
     }
-  };
 
-  const printCurrentTicket = () => {
-    if (!ticket) return;
-
-    const fallbackSelections = (ticket.bet?.selections ?? []).map((selection, index) => ({
-      fixtureName: `Fixture ${selection.fixtureId}`,
-      marketName: selection.marketBetId ? `Market ${selection.marketBetId}` : 'Market',
-      selectionName: selection.value,
-      odds: toNumber(selection.odd),
-      fixtureDate: undefined,
-      id: `fallback-${index + 1}`,
-    }));
-
-    const selections =
-      recreatedSelections.length > 0
-        ? recreatedSelections.map((selection) => ({
-          fixtureName: selection.fixtureName,
-          marketName: selection.marketName,
-          selectionName: selection.selectionName,
-          odds: toNumber(selection.odds),
-          fixtureDate: selection.fixtureDate,
-        }))
-        : fallbackSelections.map((selection) => ({
-          fixtureName: selection.fixtureName,
-          marketName: selection.marketName,
-          selectionName: selection.selectionName,
-          odds: selection.odds,
-          fixtureDate: selection.fixtureDate,
-        }));
-
-    const stakeValue = toNumber(ticket.bet?.stake);
-    const computedPayout = selections.reduce((acc, selection) => acc * selection.odds, stakeValue || 0);
-
-    const printed = printRetailTicket({
-      title: 'Retail Ticket',
-      ticketCode: ticket.ticketId,
-      printedAt: new Date().toISOString(),
-      mode: selections.length > 1 ? `Multiple (${selections.length}/${selections.length})` : 'Single (1/1)',
-      stake: stakeValue,
-      potentialPayout: Math.max(
-        toNumber(ticket.bet?.payout),
-        toNumber(ticket.payoutAmount),
-        computedPayout,
-      ),
-      status: ticket.status,
-      selections,
+    const direction = ticketSort === 'newest' ? -1 : 1;
+    return list.sort((a, b) => {
+      const aTime = new Date(a.createdAt ?? 0).getTime() || 0;
+      const bTime = new Date(b.createdAt ?? 0).getTime() || 0;
+      return (aTime - bTime) * direction;
     });
-
-    if (!printed) {
-      setError('Popup blocked. Allow popups to print ticket.');
-    }
-  };
+  }, [myTickets, ticketSort]);
 
   useEffect(() => {
-    void loadMyTickets();
-    void loadReport();
-  }, []);
+    if (activeTab !== 'data') return;
+    if (!hasLoadedReport && !loadingReport) {
+      void loadReport({ silent: true });
+    }
+    if (!hasLoadedTickets && !loadingTickets) {
+      void loadMyTickets({ silent: true });
+    }
+  }, [
+    activeTab,
+    hasLoadedReport,
+    loadingReport,
+    loadReport,
+    hasLoadedTickets,
+    loadingTickets,
+    loadMyTickets,
+  ]);
 
   return (
     <div className="space-y-4">
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <h2 className="mb-3 text-lg font-semibold">Ticket Desk</h2>
-        <form onSubmit={handleIssueSubmit(issueTicketFromBookCode)} className="mb-4 flex flex-col gap-2 md:flex-row">
-          <TextField className="flex-1">
-            <Label className="sr-only">Book Code</Label>
-            <Input
-              {...registerIssue('bookCode')}
-              placeholder="Enter book code to issue ticket"
-              className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
-            />
-          </TextField>
-          <Button type="submit" isDisabled={loadingDesk} variant="success">
-            Issue Ticket
-          </Button>
-        </form>
-        {issueErrors.bookCode ? (
-          <p className="mt-2 text-xs text-red-500">{issueErrors.bookCode.message}</p>
-        ) : null}
-
-        {issuedBatch ? (
-          <div className="mb-4 rounded border border-border-subtle p-3 text-sm">
-            <p>
-              <span className="text-text-muted">Book Code:</span> {issuedBatch.sourceBookCode}
-            </p>
-            <p>
-              <span className="text-text-muted">Issued Batch:</span> {issuedBatch.ticketBatchId}
-            </p>
-            <p>
-              <span className="text-text-muted">Lines:</span> {issuedBatch.lineCount}
-            </p>
-            <p>
-              <span className="text-text-muted">Tickets:</span>{' '}
-              {issuedBatch.tickets.map((ticket) => ticket.ticketId).join(', ') || '-'}
-            </p>
+      <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[min(92vw,360px)] flex-col gap-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`pointer-events-auto rounded-lg border px-3 py-2 shadow-lg backdrop-blur ${
+              toast.kind === 'success'
+                ? 'border-green-500/40 bg-green-500/10 text-green-500'
+                : toast.kind === 'error'
+                  ? 'border-red-500/40 bg-red-500/10 text-red-500'
+                  : 'border-blue-500/40 bg-blue-500/10 text-blue-400'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">{toast.title}</p>
+                {toast.detail ? <p className="mt-0.5 text-xs opacity-90">{toast.detail}</p> : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => dismissToast(toast.id)}
+                className="text-xs opacity-70 transition hover:opacity-100"
+              >
+                Close
+              </button>
+            </div>
           </div>
-        ) : null}
+        ))}
+      </div>
 
-        <form onSubmit={handleLookupSubmit(lookupTicket)} className="flex flex-col gap-2 md:flex-row">
-          <TextField className="flex-1">
-            <Label className="sr-only">Ticket ID</Label>
-            <Input
-              {...registerLookup('ticketId')}
-              placeholder="Enter ticket ID"
-              className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
-            />
-          </TextField>
-          <Button type="submit" isDisabled={loadingDesk}>
-            Lookup
-          </Button>
-        </form>
-        {lookupErrors.ticketId ? <p className="mt-2 text-xs text-red-500">{lookupErrors.ticketId.message}</p> : null}
-
-        {ticket ? (
-          <div className="mt-4 rounded border border-border-subtle p-3 text-sm">
-            <p>
-              <span className="text-text-muted">Ticket:</span> {ticket.ticketId}
-            </p>
-            <p>
-              <span className="text-text-muted">Status:</span> {ticket.status}
-            </p>
-            <p>
-              <span className="text-text-muted">Source Code:</span> {ticket.sourceBookCode ?? '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Stake:</span>{' '}
-              {ticket.bet?.stake ? formatCurrency(toNumber(ticket.bet.stake)) : '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Bet Status:</span> {ticket.bet?.status ?? '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Created:</span>{' '}
-              {ticket.createdAt ? new Date(ticket.createdAt).toLocaleString() : '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Expires:</span>{' '}
-              {ticket.expiresAt ? new Date(ticket.expiresAt).toLocaleString() : '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Payout Amount:</span>{' '}
-              {ticket.payoutAmount ? formatCurrency(toNumber(ticket.payoutAmount)) : '-'}
-            </p>
-            <p>
-              <span className="text-text-muted">Paid At:</span>{' '}
-              {ticket.paidAt ? new Date(ticket.paidAt).toLocaleString() : '-'}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Button onPress={printCurrentTicket} isDisabled={loadingDesk} variant="outline" size="sm">
-                Print Ticket
-              </Button>
-              <TextField>
-                <Label className="sr-only">Desk reference</Label>
+      {activeTab === 'work' ? (
+        <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+          <div className="grid gap-2 md:grid-cols-2">
+            <form onSubmit={handleIssueSubmit(issueTicketFromBookCode)} className="flex items-start gap-2">
+              <TextField className="min-w-0 flex-1">
+                <Label className="sr-only">Book code</Label>
                 <Input
-                  {...registerPayout('payoutReference')}
-                  placeholder="Desk reference"
-                  className="min-w-52 rounded border border-border-subtle bg-app-bg px-2 py-1.5 text-xs outline-none focus:border-accent-solid"
+                  {...registerIssue('bookCode')}
+                  placeholder="Enter book code"
+                  className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
                 />
               </TextField>
-              <Button
-                onPress={() => {
-                  void handlePayoutSubmit(payoutTicket)();
-                }}
-                isDisabled={!canPayout || loadingDesk}
-                variant="solid"
-                size="sm"
-              >
-                Confirm Payout
+              <Button type="submit" isDisabled={loadingDesk} variant="success">
+                Issue
               </Button>
-              <Button
-                onPress={() => {
-                  void handlePayoutSubmit(voidTicket)();
-                }}
-                isDisabled={!canVoid || loadingDesk}
-                variant="danger"
-                size="sm"
-              >
-                Void & Refund
+            </form>
+
+            <form onSubmit={handleLookupSubmit(lookupTicket)} className="flex items-start gap-2">
+              <TextField className="min-w-0 flex-1">
+                <Label className="sr-only">Ticket ID</Label>
+                <Input
+                  {...registerLookup('ticketId')}
+                  placeholder="Enter ticket ID"
+                  className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
+                />
+              </TextField>
+              <Button type="submit" isDisabled={loadingDesk}>
+                Lookup
               </Button>
-            </div>
-            {payoutErrors.payoutReference ? (
-              <p className="mt-2 text-xs text-red-500">{payoutErrors.payoutReference.message}</p>
-            ) : null}
+            </form>
           </div>
-        ) : null}
 
-        {message ? <p className="mt-3 text-sm text-green-500">{message}</p> : null}
-        {error ? <p className="mt-3 text-sm text-red-500">{error}</p> : null}
-      </section>
+          {issueErrors.bookCode ? (
+            <p className="mt-2 text-xs text-red-500">{issueErrors.bookCode.message}</p>
+          ) : null}
+          {lookupErrors.ticketId ? (
+            <p className="mt-2 text-xs text-red-500">{lookupErrors.ticketId.message}</p>
+          ) : null}
 
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Retail Report</h2>
-          <Button onPress={loadReport} isDisabled={loadingReport} variant="outline" size="sm">
-            Refresh
-          </Button>
-        </div>
+          {deskError ? (
+            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+              {deskError}
+            </div>
+          ) : null}
 
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end">
-          <label className="flex flex-col gap-1 text-xs text-text-muted">
-            From
-            <input
-              type="date"
-              value={reportFrom}
-              onChange={(event) => setReportFrom(event.target.value)}
-              className="rounded border border-border-subtle bg-app-bg px-2 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs text-text-muted">
-            To
-            <input
-              type="date"
-              value={reportTo}
-              onChange={(event) => setReportTo(event.target.value)}
-              className="rounded border border-border-subtle bg-app-bg px-2 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
-            />
-          </label>
-          <Button onPress={loadReport} isDisabled={loadingReport} variant="solid" size="sm">
-            Load Range
-          </Button>
-        </div>
-
-        {report ? (
-          <div className="space-y-3">
-            <p className="text-xs text-text-muted">
-              {new Date(report.from).toLocaleString()} to {new Date(report.to).toLocaleString()}
-            </p>
-            <div className="grid gap-2 md:grid-cols-4">
-              <div className="rounded border border-border-subtle p-3">
-                <p className="text-xs text-text-muted">Total Stake</p>
-                <p className="text-lg font-semibold">{formatCurrency(report.totalStake)}</p>
-              </div>
-              <div className="rounded border border-border-subtle p-3">
-                <p className="text-xs text-text-muted">Paid Out</p>
-                <p className="text-lg font-semibold">{formatCurrency(report.totalPaidOut)}</p>
-              </div>
-              <div className="rounded border border-border-subtle p-3">
-                <p className="text-xs text-text-muted">Unpaid Liability</p>
-                <p className="text-lg font-semibold text-amber-500">
-                  {formatCurrency(report.outstandingPayoutAmount)}
-                </p>
-              </div>
-              <div className="rounded border border-border-subtle p-3">
-                <p className="text-xs text-text-muted">Net Profit</p>
-                <p className={`text-lg font-semibold ${report.netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {formatCurrency(report.netProfit)}
-                </p>
+          {issuedBatch ? (
+            <div className="mt-3 rounded-lg border border-border-subtle bg-app-bg px-3 py-2">
+              <p className="text-sm">
+                {issuedBatch.sourceBookCode} • {issuedBatch.ticketBatchId || '-'} • {issuedBatch.lineCount} lines
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {issuedBatch.tickets.map((issued) => (
+                  <button
+                    key={issued.ticketId}
+                    type="button"
+                    className="rounded border border-border-subtle px-2 py-1 text-xs text-text-muted transition hover:bg-element-hover-bg hover:text-text-contrast"
+                    onClick={() => {
+                      void lookupTicket({ ticketId: issued.ticketId });
+                    }}
+                  >
+                    {issued.ticketId}
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded border border-border-subtle px-2 py-1">
-                Tickets: {report.ticketsCount}
-              </span>
-              <span className="rounded border border-border-subtle px-2 py-1">
-                Paid: {report.paidTicketsCount}
-              </span>
-              <span className="rounded border border-border-subtle px-2 py-1">
-                Unpaid: {report.outstandingTicketsCount}
-              </span>
-              {Object.entries(report.byStatus).map(([status, count]) => (
-                <span key={status} className="rounded border border-border-subtle px-2 py-1">
-                  {status}: {count}
+          ) : null}
+
+          {ticket ? (
+            <div className="mt-3 rounded-lg border border-border-subtle p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <p className="text-sm font-semibold">{ticket.ticketId}</p>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(ticket.status)}`}>
+                  {formatStatusLabel(ticket.status)}
                 </span>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-text-muted">No report loaded yet.</p>
-        )}
-        {reportError ? <p className="mt-2 text-sm text-red-500">{reportError}</p> : null}
-      </section>
-
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">My Tickets</h2>
-          <Button onPress={loadMyTickets} isDisabled={loadingTickets} variant="outline" size="sm">
-            Refresh
-          </Button>
-        </div>
-        <div className="space-y-2">
-          {myTickets.length === 0 ? (
-            <p className="text-sm text-text-muted">No tickets loaded.</p>
-          ) : (
-            myTickets.map((t) => (
-              <div key={t.ticketId} className="rounded border border-border-subtle px-3 py-2 text-sm">
-                <p>{t.ticketId}</p>
-                <p className="text-text-muted">{t.status}</p>
               </div>
-            ))
-          )}
-        </div>
-      </section>
+
+              <div className="grid gap-2 text-sm md:grid-cols-2">
+                <p>
+                  <span className="text-text-muted">Stake:</span>{' '}
+                  {ticket.bet?.stake ? formatCurrency(toNumber(ticket.bet.stake)) : '-'}
+                </p>
+                <p>
+                  <span className="text-text-muted">Payout:</span>{' '}
+                  {ticket.payoutAmount ? formatCurrency(toNumber(ticket.payoutAmount)) : '-'}
+                </p>
+                <p>
+                  <span className="text-text-muted">Created:</span> {formatDateTime(ticket.createdAt)}
+                </p>
+                <p>
+                  <span className="text-text-muted">Paid:</span> {formatDateTime(ticket.paidAt)}
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end">
+                <TextField className="md:min-w-[240px]">
+                  <Label className="sr-only">Payout reference</Label>
+                  <Input
+                    {...registerPayout('payoutReference')}
+                    placeholder="Payout reference"
+                    className="w-full rounded border border-border-subtle bg-app-bg px-2 py-2 text-sm outline-none focus:border-accent-solid"
+                  />
+                </TextField>
+                <Button
+                  onPress={() => {
+                    void handlePayoutSubmit(payoutTicket)();
+                  }}
+                  isDisabled={!canPayout || loadingDesk}
+                  variant="solid"
+                  size="sm"
+                >
+                  Confirm Payout
+                </Button>
+              </div>
+              {payoutErrors.payoutReference ? (
+                <p className="mt-2 text-xs text-red-500">{payoutErrors.payoutReference.message}</p>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {activeTab === 'data' ? (
+        <>
+          <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold">Report</h2>
+                {loadingReport ? (
+                  <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
+                    Loading...
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={reportPreset}
+                  onChange={(event) => {
+                    const value = event.target.value as ReportPreset;
+                    setReportPreset(value);
+                    if (value !== 'custom') {
+                      const range = resolvePresetRange(value, new Date());
+                      setReportFrom(toDateInputValue(range.from));
+                      setReportTo(toDateInputValue(range.to));
+                      void loadReport({
+                        silent: true,
+                        fromIso: range.from.toISOString(),
+                        toIso: range.to.toISOString(),
+                      });
+                    }
+                  }}
+                  className="rounded border border-border-subtle bg-app-bg px-2 py-1.5 text-sm text-text-contrast outline-none focus:border-accent-solid"
+                >
+                  {REPORT_PRESET_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <Button onPress={() => void loadReport()} isDisabled={loadingReport} variant="outline" size="sm">
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            {reportPreset === 'custom' ? (
+              <div className="mb-3 flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  From
+                  <input
+                    type="date"
+                    value={reportFrom}
+                    onChange={(event) => setReportFrom(event.target.value)}
+                    className="rounded border border-border-subtle bg-app-bg px-2 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-text-muted">
+                  To
+                  <input
+                    type="date"
+                    value={reportTo}
+                    onChange={(event) => setReportTo(event.target.value)}
+                    className="rounded border border-border-subtle bg-app-bg px-2 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
+                  />
+                </label>
+                <Button onPress={() => void loadReport()} isDisabled={loadingReport} size="sm">
+                  Apply
+                </Button>
+              </div>
+            ) : null}
+
+            {loadingReport && !report ? (
+              <div className="space-y-3 animate-pulse">
+                <div className="h-4 w-56 rounded bg-element-hover-bg" />
+                <div className="grid gap-2 md:grid-cols-4">
+                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
+                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
+                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
+                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
+                </div>
+                <div className="h-6 rounded bg-element-hover-bg" />
+              </div>
+            ) : report ? (
+              <div className="space-y-3">
+                <p className="text-xs text-text-muted">
+                  {formatDateTime(report.from)} to {formatDateTime(report.to)}
+                </p>
+                <div className="grid gap-2 md:grid-cols-4">
+                  <div className="rounded border border-border-subtle p-3">
+                    <p className="text-xs text-text-muted">Total Stake</p>
+                    <p className="text-lg font-semibold">{formatCurrency(report.totalStake)}</p>
+                  </div>
+                  <div className="rounded border border-border-subtle p-3">
+                    <p className="text-xs text-text-muted">Paid Out</p>
+                    <p className="text-lg font-semibold">{formatCurrency(report.totalPaidOut)}</p>
+                  </div>
+                  <div className="rounded border border-border-subtle p-3">
+                    <p className="text-xs text-text-muted">Unpaid Liability</p>
+                    <p className="text-lg font-semibold text-amber-500">
+                      {formatCurrency(report.outstandingPayoutAmount)}
+                    </p>
+                  </div>
+                  <div className="rounded border border-border-subtle p-3">
+                    <p className="text-xs text-text-muted">Net Profit</p>
+                    <p className={`text-lg font-semibold ${report.netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {formatCurrency(report.netProfit)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="rounded border border-border-subtle px-2 py-1">
+                    Tickets: {report.ticketsCount}
+                  </span>
+                  <span className="rounded border border-border-subtle px-2 py-1">
+                    Paid: {report.paidTicketsCount}
+                  </span>
+                  <span className="rounded border border-border-subtle px-2 py-1">
+                    Unpaid: {report.outstandingTicketsCount}
+                  </span>
+                  {Object.entries(report.byStatus).map(([status, count]) => (
+                    <span key={status} className="rounded border border-border-subtle px-2 py-1">
+                      {formatStatusLabel(status)}: {count}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">No report loaded.</p>
+            )}
+            {reportError ? <p className="mt-2 text-sm text-red-500">{reportError}</p> : null}
+          </section>
+
+          <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold">Tickets</h2>
+                {loadingTickets ? (
+                  <span className="rounded border border-border-subtle px-2 py-0.5 text-xs text-text-muted">
+                    Loading...
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={ticketSort}
+                  onChange={(event) => setTicketSort(event.target.value as TicketSort)}
+                  className="rounded border border-border-subtle bg-app-bg px-2 py-1.5 text-sm text-text-contrast outline-none focus:border-accent-solid"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="status">Status</option>
+                </select>
+                <Button onPress={() => void loadMyTickets()} isDisabled={loadingTickets} variant="outline" size="sm">
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            {loadingTickets && myTickets.length === 0 ? (
+              <div className="space-y-2 animate-pulse">
+                <div className="h-12 rounded border border-border-subtle bg-app-bg" />
+                <div className="h-12 rounded border border-border-subtle bg-app-bg" />
+                <div className="h-12 rounded border border-border-subtle bg-app-bg" />
+              </div>
+            ) : sortedTickets.length === 0 ? (
+              <p className="text-sm text-text-muted">No tickets loaded.</p>
+            ) : (
+              <div className="space-y-2">
+                {sortedTickets.map((item) => (
+                  <div
+                    key={item.ticketId}
+                    className="flex items-center justify-between gap-3 rounded border border-border-subtle px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{item.ticketId}</p>
+                      <p className="text-xs text-text-muted">{formatDateTime(item.createdAt)}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(item.status)}`}>
+                        {formatStatusLabel(item.status)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onPress={() => {
+                          setActiveTab('work');
+                          void lookupTicket({ ticketId: item.ticketId });
+                        }}
+                      >
+                        Open
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {ticketsError ? <p className="mt-2 text-sm text-red-500">{ticketsError}</p> : null}
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

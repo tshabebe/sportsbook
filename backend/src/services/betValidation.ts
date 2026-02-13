@@ -78,11 +78,21 @@ export const inPlayStatuses = new Set([
 export const isFixtureBlockedForPlacement = (fixtureStatus?: string): boolean =>
   Boolean(fixtureStatus && inPlayStatuses.has(fixtureStatus));
 
-export const extractSelectionDetailsFromSnapshot = (
+export type SnapshotSelectionMatch = {
+  found: boolean;
+  suspended?: boolean;
+  odd?: number;
+  betId?: number | string;
+  value?: string;
+  handicap?: string;
+  bookmakerId?: number;
+};
+
+export const resolveSelectionFromSnapshot = (
   snapshot: unknown,
   selection: ApiBetSelectionInput,
   fixtureId: number,
-): { found: boolean; suspended?: boolean } => {
+): SnapshotSelectionMatch => {
   if (!snapshot || typeof snapshot !== 'object') return { found: false };
   const response = (snapshot as { response?: unknown }).response;
   if (!Array.isArray(response)) return { found: false };
@@ -93,7 +103,11 @@ export const extractSelectionDetailsFromSnapshot = (
   for (const item of fixtureItems) {
     const selections = extractSelectionsFromItem(item);
     for (const s of selections) {
-      if (selection.bookmakerId && s.bookmakerId && Number(s.bookmakerId) !== Number(selection.bookmakerId)) {
+      if (
+        selection.bookmakerId &&
+        s.bookmakerId &&
+        Number(s.bookmakerId) !== Number(selection.bookmakerId)
+      ) {
         continue;
       }
       if (selection.betId && s.betId && String(s.betId) !== String(selection.betId)) {
@@ -102,13 +116,34 @@ export const extractSelectionDetailsFromSnapshot = (
       if (targetHandicap && normalizeHandicap(s.handicap) !== targetHandicap) {
         continue;
       }
-      if (
-        s.value.toLowerCase() === selection.value.toLowerCase() &&
-        oddsEqual(Number(s.odd), Number(selection.odd))
-      ) {
-        return { found: true, suspended: Boolean(s.suspended) };
+      if (s.value.toLowerCase() !== selection.value.toLowerCase()) {
+        continue;
       }
+      return {
+        found: true,
+        suspended: Boolean(s.suspended),
+        odd: Number(s.odd),
+        betId: s.betId,
+        value: s.value,
+        handicap: s.handicap,
+        bookmakerId: s.bookmakerId,
+      };
     }
   }
   return { found: false };
+};
+
+export const extractSelectionDetailsFromSnapshot = (
+  snapshot: unknown,
+  selection: ApiBetSelectionInput,
+  fixtureId: number,
+): { found: boolean; suspended?: boolean } => {
+  const resolved = resolveSelectionFromSnapshot(snapshot, selection, fixtureId);
+  if (!resolved.found) {
+    return { found: false };
+  }
+  if (!oddsEqual(Number(resolved.odd), Number(selection.odd))) {
+    return { found: false };
+  }
+  return { found: true, suspended: Boolean(resolved.suspended) };
 };
