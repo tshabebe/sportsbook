@@ -84,6 +84,13 @@ export function Sidebar() {
 
   return (
     <aside className="hidden h-full w-[240px] flex-col overflow-y-auto border-r border-border-subtle bg-element-bg md:flex">
+      <div className="border-b border-border-subtle p-4 text-xs text-text-muted">
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Pick a league</li>
+          <li>Select odds in main board</li>
+          <li>Book or place from bet slip</li>
+        </ol>
+      </div>
       <button
         type="button"
         onClick={() => handleLeagueClick(0)}
