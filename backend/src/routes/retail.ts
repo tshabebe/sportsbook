@@ -15,6 +15,7 @@ import {
   retailTicketParamsSchema,
 } from '../validation/retail';
 import { createRetailToken, verifyRetailerPassword } from '../services/retailAuth';
+import { settleRetailTicketIfDecidable } from '../services/retailSettlement';
 import { requireRetailerToken } from './utils';
 
 export const router = Router();
@@ -56,6 +57,8 @@ router.get(
     if (!parsed.success) {
       throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
     }
+    await settleRetailTicketIfDecidable(parsed.data.ticketId);
+
     const ticket = await getRetailTicketByTicketId(parsed.data.ticketId);
     if (!ticket) {
       throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
@@ -72,6 +75,8 @@ router.post(
     if (!parsed.success) {
       throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
     }
+
+    await settleRetailTicketIfDecidable(parsed.data.ticketId);
 
     const claimed = await claimRetailTicket(parsed.data.ticketId, auth.retailerId);
     if (!claimed) {
@@ -100,6 +105,8 @@ router.post(
     if (!body.success) {
       throw new HttpError(400, 'INVALID_PAYOUT_PAYLOAD', 'Invalid payout payload');
     }
+
+    await settleRetailTicketIfDecidable(params.data.ticketId);
 
     const result = await payoutRetailTicket({
       ticketId: params.data.ticketId,
@@ -140,4 +147,3 @@ router.get(
     res.json({ ok: true, tickets });
   }),
 );
-

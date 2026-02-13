@@ -27,6 +27,10 @@ import {
   extractSelectionDetailsFromSnapshot,
   isFixtureBlockedForPlacement,
 } from '../services/betValidation';
+import {
+  loadMarketCatalog,
+  validateMarketForPlacement,
+} from '../services/marketCatalog';
 import { normalizeBookCodeRoot, rebuildSlipFromStoredLines } from '../services/recreateSlip';
 
 export const router = Router();
@@ -57,9 +61,59 @@ const validateSlipSelections = async (
   withExposure: boolean,
 ) => {
   const lines = expandBetSlipLines(slip);
+  let marketCatalog;
+  try {
+    marketCatalog = await loadMarketCatalog();
+  } catch {
+    const unavailableResults = lines.flatMap((line) =>
+      line.selections.map((selection) => ({
+        lineKey: line.key,
+        selection,
+        ok: false as const,
+        error: {
+          code: 'MARKET_CATALOG_UNAVAILABLE',
+          message: 'Market catalog unavailable',
+        },
+      })),
+    );
+    return { lines, results: unavailableResults, ok: false };
+  }
+
+  if (marketCatalog.size === 0) {
+    const emptyCatalogResults = lines.flatMap((line) =>
+      line.selections.map((selection) => ({
+        lineKey: line.key,
+        selection,
+        ok: false as const,
+        error: {
+          code: 'MARKET_CATALOG_UNAVAILABLE',
+          message: 'Market catalog is empty',
+        },
+      })),
+    );
+    return { lines, results: emptyCatalogResults, ok: false };
+  }
+
   const results = await Promise.all(
     lines.flatMap((line) =>
       line.selections.map(async (selection) => {
+        const marketValidation = validateMarketForPlacement(
+          selection.betId,
+          marketCatalog,
+        );
+        if (!marketValidation.ok) {
+          return {
+            lineKey: line.key,
+            selection,
+            ok: false,
+            error: {
+              code: marketValidation.code,
+              message: marketValidation.message,
+              details: marketValidation.details,
+            },
+          };
+        }
+
         let oddsData;
         try {
           oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
@@ -210,6 +264,10 @@ const selectionNameFromValue = (
 const sanitizeSelectionToken = (value: string): string =>
   value.replace(/[^a-zA-Z0-9_/-]/g, '_');
 
+const validationFailureReason = (
+  results: Array<{ ok: boolean; error?: { message?: string } }>,
+): string => results.find((item) => !item.ok)?.error?.message ?? 'Validation failed';
+
 router.post(
   '/betslip/validate',
   asyncHandler(async (req: Request, res: Response) => {
@@ -258,7 +316,7 @@ router.post(
     if (!validation.ok) {
       res.status(409).json({
         ok: false,
-        reason: 'Odds changed or unavailable',
+        reason: validationFailureReason(validation.results),
         validation: validation.results,
       });
       return;
@@ -370,7 +428,7 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
   if (!validation.ok) {
     res.status(409).json({
       ok: false,
-      reason: 'Odds changed or unavailable',
+      reason: validationFailureReason(validation.results),
       validation: validation.results,
     });
     return;

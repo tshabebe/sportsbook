@@ -77,6 +77,7 @@ describe('retail ticket flow live integration', () => {
 
         const openTicketId = `TK-OPEN-${now}`;
         const payoutTicketId = `TK-PAYOUT-${now}`;
+        const autoSettledTicketId = `TK-AUTO-${now}`;
 
         const [openBet] = await db
           .insert(schema.bets)
@@ -102,6 +103,18 @@ describe('retail ticket flow live integration', () => {
             }),
           )
           .returning();
+        const [autoSettledBet] = await db
+          .insert(schema.bets)
+          .values(
+            schema.betsInsertSchema.parse({
+              betRef: `bet_auto_${now}`,
+              channel: 'online_retail_ticket',
+              ticketId: autoSettledTicketId,
+              stake: '10.00',
+              status: 'won',
+            }),
+          )
+          .returning();
 
         await db.insert(schema.retailTickets).values(
           schema.retailTicketsInsertSchema.parse({
@@ -119,6 +132,14 @@ describe('retail ticket flow live integration', () => {
             claimedByRetailerId: retailerOne.id,
             claimedAt: new Date(),
             payoutAmount: '25.00',
+          }),
+        );
+        await db.insert(schema.retailTickets).values(
+          schema.retailTicketsInsertSchema.parse({
+            ticketId: autoSettledTicketId,
+            betId: autoSettledBet.id,
+            status: 'settled_won_unpaid',
+            payoutAmount: '15.00',
           }),
         );
 
@@ -175,6 +196,21 @@ describe('retail ticket flow live integration', () => {
         expect(payoutAgainIdempotent.status).toBe(200);
         expect(payoutAgainIdempotent.body.ok).toBe(true);
         expect(payoutAgainIdempotent.body.idempotent).toBe(true);
+
+        const claimAutoSettled = await request(app)
+          .post(`/api/retail/tickets/${autoSettledTicketId}/claim`)
+          .set('Authorization', `Bearer ${tokenOne}`);
+        expect(claimAutoSettled.status).toBe(200);
+        expect(claimAutoSettled.body.ticket.status).toBe('settled_won_unpaid');
+        expect(claimAutoSettled.body.ticket.claimedByRetailerId).toBe(retailerOne.id);
+
+        const payoutAutoSettled = await request(app)
+          .post(`/api/retail/tickets/${autoSettledTicketId}/payout`)
+          .set('Authorization', `Bearer ${tokenOne}`)
+          .send({ payoutReference: `payout_auto_${now}` });
+        expect(payoutAutoSettled.status).toBe(200);
+        expect(payoutAutoSettled.body.ok).toBe(true);
+        expect(payoutAutoSettled.body.ticket.status).toBe('paid');
       },
       30000,
     );
@@ -283,4 +319,3 @@ describe('retail ticket flow live integration', () => {
     20000,
   );
 });
-

@@ -277,7 +277,7 @@ export const listRetailTicketsByBatchId = async (
 };
 
 export const claimRetailTicket = async (ticketId: string, retailerId: number) => {
-  const [updated] = await db
+  let [updated] = await db
     .update(retailTickets)
     .set(
       retailTicketsUpdateSchema.parse({
@@ -294,6 +294,28 @@ export const claimRetailTicket = async (ticketId: string, retailerId: number) =>
       ),
     )
     .returning();
+
+  // A winning ticket may already be auto-settled before claim.
+  // In that case we attach ownership while preserving settled status.
+  if (!updated) {
+    [updated] = await db
+      .update(retailTickets)
+      .set(
+        retailTicketsUpdateSchema.parse({
+          status: 'settled_won_unpaid',
+          claimedByRetailerId: retailerId,
+          claimedAt: new Date(),
+        }),
+      )
+      .where(
+        and(
+          eq(retailTickets.ticketId, ticketId),
+          eq(retailTickets.status, 'settled_won_unpaid'),
+          sql`${retailTickets.claimedByRetailerId} is null`,
+        ),
+      )
+      .returning();
+  }
 
   if (!updated) return null;
   const parsed = retailTicketsSelectSchema.parse(updated);

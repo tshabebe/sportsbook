@@ -129,6 +129,15 @@ describe('api-football proxy live integration', () => {
     expect(response.body).toHaveProperty('results');
   });
 
+  it.runIf(shouldRun)('hits pre-match odds bets catalog', async () => {
+    const { createApp } = await import('../../src/app');
+    const app = createApp();
+
+    const response = await request(app).get('/api/football/odds/bets');
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('results');
+  });
+
   it
     .runIf(shouldRun && Boolean(fixtureId))('hits fixture events', async () => {
       const { createApp } = await import('../../src/app');
@@ -177,4 +186,3 @@ describe('api-football proxy live integration', () => {
       expect(response.body).toHaveProperty('results');
     });
 });
-
