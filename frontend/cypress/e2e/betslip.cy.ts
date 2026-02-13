@@ -77,30 +77,19 @@ describe('Bet Slip E2E', () => {
       response: [],
     };
 
-    cy.intercept('GET', '**/api/football/**', {
+    cy.intercept('GET', '**/football/**', {
       statusCode: 200,
       body: emptyApiFootball,
     });
 
-    cy.intercept('GET', '**/api/bets/my', {
+    cy.intercept('GET', '**/bets/my', {
       statusCode: 200,
       body: { ok: true, bets: [] },
     });
   });
 
   it('shows Book a Bet for guests and returns short booking code', () => {
-    cy.intercept('POST', '**/api/betslip/validate*', {
-      statusCode: 200,
-      body: {
-        ok: true,
-        mode: 'multiple',
-        lines: [{ key: 'line_1', stake: 10, potentialPayout: 37.8, selections: 2 }],
-        totalPotentialPayout: 37.8,
-        results: [{ ok: true }, { ok: true }],
-      },
-    }).as('validate');
-
-    cy.intercept('POST', '**/api/betslip/place-retail*', {
+    cy.intercept('POST', '**/betslip/place-retail*', {
       statusCode: 200,
       body: {
         ok: true,
@@ -112,20 +101,20 @@ describe('Bet Slip E2E', () => {
     visitWithSeededBetSlip();
 
     cy.get('[data-testid="betslip-page"]').within(() => {
-      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
-        .first()
+      cy.get('[data-testid="betslip-primary-action"]:visible', { timeout: 20000 })
+        .should('have.length', 1)
         .should('contain.text', 'Book a Bet')
         .should('not.be.disabled')
         .click({ force: true });
-      cy.contains('Book A Bet Code:', { timeout: 30000 }).should('be.visible');
-      cy.contains('11-030686', { timeout: 30000 }).should('be.visible');
-      cy.contains('button', 'Share', { timeout: 30000 }).should('be.visible');
-      cy.contains('button', 'Print Ticket', { timeout: 30000 }).should('be.visible');
     });
+    cy.wait('@placeRetail', { timeout: 30000 });
+    cy.contains('Book A Bet Code:', { timeout: 30000 }).should('be.visible');
+    cy.contains('11-030686', { timeout: 30000 }).should('be.visible');
+    cy.contains('button', 'Share', { timeout: 30000 }).should('be.visible');
   });
 
   it('places wallet bet when balance is sufficient', () => {
-    cy.intercept('GET', '**/api/wallet/profile', {
+    cy.intercept('GET', '**/wallet/profile', {
       statusCode: 200,
       body: {
         ok: true,
@@ -138,18 +127,7 @@ describe('Bet Slip E2E', () => {
       },
     }).as('walletProfile');
 
-    cy.intercept('POST', '**/api/betslip/validate*', {
-      statusCode: 200,
-      body: {
-        ok: true,
-        mode: 'multiple',
-        lines: [{ key: 'line_1', stake: 10, potentialPayout: 37.8, selections: 2 }],
-        totalPotentialPayout: 37.8,
-        results: [{ ok: true }, { ok: true }],
-      },
-    }).as('validate');
-
-    cy.intercept('POST', '**/api/betslip/place*', {
+    cy.intercept('POST', '**/betslip/place*', {
       statusCode: 200,
       body: {
         ok: true,
@@ -162,19 +140,20 @@ describe('Bet Slip E2E', () => {
     visitWithSeededBetSlip({ withAuthToken: true });
     cy.contains('Br500.00', { timeout: 20000 }).should('exist');
     cy.get('[data-testid="betslip-page"]').within(() => {
-      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
-        .first()
+      cy.get('[data-testid="betslip-primary-action"]:visible', { timeout: 20000 })
+        .should('have.length', 1)
         .should('contain.text', 'Place Bet')
         .should('not.be.disabled')
         .click({ force: true });
     });
 
+    cy.wait('@placeWallet', { timeout: 30000 });
     cy.contains('Bet Placed', { timeout: 30000 }).should('be.visible');
     cy.contains('bet_1700000000000_abcd12', { timeout: 30000 }).should('be.visible');
   });
 
   it('blocks wallet bet when balance is insufficient', () => {
-    cy.intercept('GET', '**/api/wallet/profile', {
+    cy.intercept('GET', '**/wallet/profile', {
       statusCode: 200,
       body: {
         ok: true,
@@ -187,12 +166,12 @@ describe('Bet Slip E2E', () => {
       },
     }).as('walletProfile');
 
-    cy.intercept('POST', '**/api/betslip/place*').as('placeWallet');
+    cy.intercept('POST', '**/betslip/place*').as('placeWallet');
 
     visitWithSeededBetSlip({ withAuthToken: true });
     cy.get('[data-testid="betslip-page"]').within(() => {
-      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
-        .first()
+      cy.get('[data-testid="betslip-primary-action"]:visible', { timeout: 20000 })
+        .should('have.length', 1)
         .should('contain.text', 'Place Bet')
         .click({ force: true });
       cy.contains('Insufficient balance').should('be.visible');
@@ -201,7 +180,7 @@ describe('Bet Slip E2E', () => {
   });
 
   it('recreates selections from share query on /play/betslip', () => {
-    cy.intercept('GET', '**/api/tickets/11-030686/recreate', {
+    cy.intercept('GET', '**/tickets/11-030686/recreate', {
       statusCode: 200,
       body: {
         ok: true,
@@ -244,7 +223,7 @@ describe('Bet Slip E2E', () => {
   });
 
   it('shows authenticated wallet bets inside My Bets tab', () => {
-    cy.intercept('GET', '**/api/bets/my', {
+    cy.intercept('GET', '**/bets/my', {
       statusCode: 200,
       body: {
         ok: true,

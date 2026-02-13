@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { X, Ticket, Copy, Share2, FileText, ChevronLeft, Printer } from 'lucide-react';
+import { X, Ticket, Copy, Share2, FileText, ChevronLeft } from 'lucide-react';
 import {
   Button as AriaButton,
   Dialog,
@@ -29,7 +29,6 @@ import type { BetMode } from '../types/backendSchemas';
 import { calculateBetSlipPreview } from '../lib/betslip';
 import { getAuthToken } from '../lib/auth';
 import { useWalletProfile } from '../hooks/useWallet';
-import { printRetailTicket } from '../lib/retailPrint';
 
 import { useMyBets } from '../hooks/useMyBets';
 
@@ -46,10 +45,6 @@ const betSlipStakeSchema = z.object({
 
 type BetSlipStakeForm = z.infer<typeof betSlipStakeSchema>;
 type PlaceChannel = 'wallet' | 'retail';
-type ValidationResult = {
-  ok?: boolean;
-  error?: string | { message?: string };
-};
 type BetslipSelectionView = {
   id: string;
   fixtureName: string;
@@ -63,14 +58,6 @@ type BookedTicket = {
   bets: BetslipSelectionView[];
   date: string;
   stake: number;
-};
-
-const getResultErrorMessage = (results: ValidationResult[] | undefined): string => {
-  if (!results || results.length === 0) return 'Validation failed';
-  const first = results.find((result) => !result?.ok) ?? results[0];
-  if (typeof first?.error === 'string') return first.error;
-  if (typeof first?.error?.message === 'string') return first.error.message;
-  return 'Validation failed';
 };
 
 export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }: BetslipProps) {
@@ -101,7 +88,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
   const normalizedInitialStake =
     Number.isFinite(initialStake) && initialStake > 0 ? initialStake : 1;
 
-  const { watch, setValue, getValues, trigger } = useForm<BetSlipStakeForm>({
+  const { watch, setValue, getValues } = useForm<BetSlipStakeForm>({
     resolver: zodResolver(betSlipStakeSchema),
     defaultValues: { stake: normalizedInitialStake },
   });
@@ -123,7 +110,6 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
   const updateStake = (value: number) => {
     const normalized = Math.max(0, value);
     setValue('stake', normalized, { shouldValidate: true });
-    trigger('stake');
   };
 
   const preview = calculateBetSlipPreview({
@@ -134,11 +120,13 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
   });
 
   const placeSlip = async (channel: PlaceChannel) => {
-    const valid = await trigger('stake');
-    if (!valid || bets.length === 0) return;
+    if (bets.length === 0) return;
 
-    const stakeValue = getValues('stake');
-    if (!stakeValue || stakeValue <= 0) return;
+    const stakeValue = Number(getValues('stake'));
+    if (!Number.isFinite(stakeValue) || stakeValue <= 0) {
+      setError('Stake must be greater than 0');
+      return;
+    }
 
     if (preview.error) {
       setError(preview.error);
@@ -171,12 +159,6 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
         activeTab,
         activeTab === 'system' ? systemSize : undefined,
       );
-
-      const validateRes = await api.post('/betslip/validate', payload);
-      if (!validateRes.data.ok) {
-        setError(getResultErrorMessage(validateRes.data.results));
-        return;
-      }
 
       if (channel === 'wallet') {
         const placeRes = await api.post('/betslip/place', payload);
@@ -216,7 +198,6 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
           stake: stakeValue,
         };
         setBookedTickets((prev) => [newTicket, ...prev]);
-        printBookedTicket(newTicket);
         setViewingTicketCode(createdCode);
         setSidebarTab('mybets');
       }
@@ -224,7 +205,15 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
       setValue('stake', normalizedInitialStake);
     } catch (requestError) {
       if (requestError instanceof AxiosError) {
-        setError(requestError.response?.data?.error?.message || 'Failed to place bet');
+        const payload = requestError.response?.data as
+          | { error?: { message?: string }; reason?: string; message?: string }
+          | undefined;
+        setError(
+          payload?.error?.message ||
+            payload?.reason ||
+            payload?.message ||
+            'Failed to place bet',
+        );
       } else {
         setError('Failed to place bet');
       }
@@ -262,33 +251,6 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
       } catch {
         setError('Failed to copy share link');
       }
-    }
-  };
-
-  const printBookedTicket = (ticket: BookedTicket) => {
-    const totalOdds = ticket.bets.reduce((acc, bet) => acc * Number(bet.odds || 1), 1);
-    const printed = printRetailTicket({
-      title: 'Book A Bet',
-      ticketCode: ticket.code,
-      printedAt: ticket.date,
-      mode:
-        ticket.bets.length > 1
-          ? `Multiple (${ticket.bets.length}/${ticket.bets.length})`
-          : 'Single (1/1)',
-      stake: ticket.stake,
-      potentialPayout: Number((ticket.stake * totalOdds).toFixed(2)),
-      status: 'open',
-      selections: ticket.bets.map((bet) => ({
-        fixtureName: bet.fixtureName.replace(' vs ', ' - '),
-        marketName: bet.marketName,
-        selectionName: bet.selectionName,
-        odds: Number(bet.odds || 0),
-        fixtureDate: bet.fixtureDate,
-      })),
-    });
-
-    if (!printed) {
-      setError('Popup blocked. Allow popups to print ticket.');
     }
   };
 
@@ -596,13 +558,6 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
                 >
                   <Share2 size={16} strokeWidth={3} />
                   Share
-                </Button>
-                <Button
-                  onPress={() => printBookedTicket(activeTicket)}
-                  className="col-span-2 bg-white text-black border-none flex items-center justify-center gap-2 text-[13px] font-black py-3.5 rounded-lg active:scale-95"
-                >
-                  <Printer size={16} strokeWidth={3} />
-                  Print Ticket
                 </Button>
               </div>
               <Button onPress={() => setViewingTicketCode(null)} className="w-full bg-[#3a3a3a] text-white border-none py-3.5 font-black uppercase tracking-widest text-xs rounded-lg">Close</Button>

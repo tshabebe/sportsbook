@@ -52,28 +52,17 @@ describe('Retail Full E2E Flow', () => {
       response: [],
     };
 
-    cy.intercept('GET', '**/api/football/**', {
+    cy.intercept('GET', '**/football/**', {
       statusCode: 200,
       body: emptyApiFootball,
     });
 
-    cy.intercept('GET', '**/api/bets/my', {
+    cy.intercept('GET', '**/bets/my', {
       statusCode: 200,
       body: { ok: true, bets: [] },
     });
 
-    cy.intercept('POST', '**/api/betslip/validate*', {
-      statusCode: 200,
-      body: {
-        ok: true,
-        mode: 'single',
-        lines: [{ key: 'line_1', stake: 10, potentialPayout: 21, selections: 1 }],
-        totalPotentialPayout: 21,
-        results: [{ ok: true }],
-      },
-    }).as('validateSlip');
-
-    cy.intercept('POST', '**/api/betslip/place-retail*', {
+    cy.intercept('POST', '**/betslip/place-retail*', {
       statusCode: 200,
       body: {
         ok: true,
@@ -91,7 +80,7 @@ describe('Retail Full E2E Flow', () => {
     }).as('bookCode');
 
     let myTicketsCalls = 0;
-    cy.intercept('GET', '**/api/retail/my/tickets*', (req) => {
+    cy.intercept('GET', '**/retail/my/tickets*', (req) => {
       myTicketsCalls += 1;
       if (myTicketsCalls === 1) {
         req.reply({ statusCode: 200, body: { ok: true, tickets: [] } });
@@ -107,7 +96,7 @@ describe('Retail Full E2E Flow', () => {
     }).as('myTickets');
 
     let reportCalls = 0;
-    cy.intercept('GET', '**/api/retail/my/reports/summary*', (req) => {
+    cy.intercept('GET', '**/retail/my/reports/summary*', (req) => {
       reportCalls += 1;
       if (reportCalls === 1) {
         req.reply({
@@ -146,7 +135,7 @@ describe('Retail Full E2E Flow', () => {
       });
     }).as('report');
 
-    cy.intercept('POST', '**/api/retail/tickets/issue', {
+    cy.intercept('POST', '**/retail/tickets/issue', {
       statusCode: 200,
       body: {
         ok: true,
@@ -184,7 +173,7 @@ describe('Retail Full E2E Flow', () => {
       },
     }).as('issueTicket');
 
-    cy.intercept('GET', '**/api/retail/tickets/22-998877', {
+    cy.intercept('GET', '**/retail/tickets/22-998877', {
       statusCode: 200,
       body: {
         ok: true,
@@ -210,7 +199,7 @@ describe('Retail Full E2E Flow', () => {
       },
     }).as('lookupIssued');
 
-    cy.intercept('GET', '**/api/tickets/11-030686/recreate', {
+    cy.intercept('GET', '**/tickets/11-030686/recreate', {
       statusCode: 200,
       body: {
         ok: true,
@@ -251,12 +240,13 @@ describe('Retail Full E2E Flow', () => {
     });
 
     cy.get('[data-testid="betslip-page"]', { timeout: 20000 }).should('be.visible');
-    cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
-      .should('contain.text', 'Book a Bet')
-      .first()
-      .click({ force: true });
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.get('[data-testid="betslip-primary-action"]', { timeout: 20000 })
+        .should('contain.text', 'Book a Bet')
+        .first()
+        .click();
+    });
 
-    cy.wait('@validateSlip', { timeout: 20000 });
     cy.wait('@bookCode', { timeout: 20000 });
     cy.contains('11-030686', { timeout: 20000 }).should('be.visible');
 
