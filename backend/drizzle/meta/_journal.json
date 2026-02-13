@@ -43,6 +43,20 @@
       "when": 1770652875351,
       "tag": "0005_shiny_exiles",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770979041233,
+      "tag": "0006_tiresome_tempest",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770980151368,
+      "tag": "0007_solid_landau",
+      "breakpoints": true
     }
   ]
 }

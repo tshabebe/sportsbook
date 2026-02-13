@@ -108,14 +108,6 @@ describe('Bet Slip E2E', () => {
         ticket: { ticketId: '11-030686' },
       },
     }).as('placeRetail');
-    cy.intercept('POST', '**/api/tickets*', {
-      statusCode: 200,
-      body: {
-        ok: true,
-        bookCode: '11-030686',
-        ticket: { ticketId: '11-030686' },
-      },
-    }).as('placeRetail');
 
     visitWithSeededBetSlip();
 
@@ -128,6 +120,7 @@ describe('Bet Slip E2E', () => {
       cy.contains('Book A Bet Code:', { timeout: 30000 }).should('be.visible');
       cy.contains('11-030686', { timeout: 30000 }).should('be.visible');
       cy.contains('button', 'Share', { timeout: 30000 }).should('be.visible');
+      cy.contains('button', 'Print Ticket', { timeout: 30000 }).should('be.visible');
     });
   });
 

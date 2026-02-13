@@ -31,6 +31,7 @@ export const retailTickets = pgTable(
       .default('online_retail_ticket')
       .notNull(),
     status: text('status', { enum: retailTicketStatusEnum }).default('open').notNull(),
+    sourceBookCode: text('source_book_code'),
     betId: bigint('bet_id', { mode: 'number' })
       .notNull()
       .references(() => bets.id),
@@ -56,6 +57,7 @@ export const retailTickets = pgTable(
     claimedByRetailerIdx: index('retail_tickets_claimed_by_retailer_idx').on(
       table.claimedByRetailerId,
     ),
+    sourceBookCodeIdx: index('retail_tickets_source_book_code_idx').on(table.sourceBookCode),
     betIdIdx: index('retail_tickets_bet_id_idx').on(table.betId),
   }),
 );
@@ -66,4 +68,3 @@ export const retailTicketsUpdateSchema = createUpdateSchema(retailTickets);
 
 export type DbRetailTicketInsert = typeof retailTickets.$inferInsert;
 export type DbRetailTicketSelect = typeof retailTickets.$inferSelect;
-

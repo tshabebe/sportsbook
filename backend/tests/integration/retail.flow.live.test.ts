@@ -37,7 +37,7 @@ describe('retail ticket flow live integration', () => {
 
   it
     .runIf(shouldRunRetailFlow)(
-      'supports login, claim ownership, payout access control, and idempotent payout',
+      'supports login, payout ownership control, and idempotent payout',
       async () => {
         const [{ createApp }, { db }, schema, auth] = await Promise.all([
           import('../../src/app'),
@@ -139,6 +139,8 @@ describe('retail ticket flow live integration', () => {
             ticketId: autoSettledTicketId,
             betId: autoSettledBet.id,
             status: 'settled_won_unpaid',
+            claimedByRetailerId: retailerOne.id,
+            claimedAt: new Date(),
             payoutAmount: '15.00',
           }),
         );
@@ -163,17 +165,11 @@ describe('retail ticket flow live integration', () => {
         expect(lookupOpen.status).toBe(200);
         expect(lookupOpen.body.ticket.status).toBe('open');
 
-        const claimByOwner = await request(app)
-          .post(`/api/retail/tickets/${openTicketId}/claim`)
-          .set('Authorization', `Bearer ${tokenOne}`);
-        expect(claimByOwner.status).toBe(200);
-        expect(claimByOwner.body.ticket.status).toBe('claimed');
-        expect(claimByOwner.body.ticket.claimedByRetailerId).toBe(retailerOne.id);
-
-        const claimByOtherRetailer = await request(app)
-          .post(`/api/retail/tickets/${openTicketId}/claim`)
-          .set('Authorization', `Bearer ${tokenTwo}`);
-        expect(claimByOtherRetailer.status).toBe(409);
+        const payoutOpenShouldFail = await request(app)
+          .post(`/api/retail/tickets/${openTicketId}/payout`)
+          .set('Authorization', `Bearer ${tokenOne}`)
+          .send({ payoutReference: `payout_open_${now}` });
+        expect(payoutOpenShouldFail.status).toBe(409);
 
         const payoutByNonOwner = await request(app)
           .post(`/api/retail/tickets/${payoutTicketId}/payout`)
@@ -196,13 +192,6 @@ describe('retail ticket flow live integration', () => {
         expect(payoutAgainIdempotent.status).toBe(200);
         expect(payoutAgainIdempotent.body.ok).toBe(true);
         expect(payoutAgainIdempotent.body.idempotent).toBe(true);
-
-        const claimAutoSettled = await request(app)
-          .post(`/api/retail/tickets/${autoSettledTicketId}/claim`)
-          .set('Authorization', `Bearer ${tokenOne}`);
-        expect(claimAutoSettled.status).toBe(200);
-        expect(claimAutoSettled.body.ticket.status).toBe('settled_won_unpaid');
-        expect(claimAutoSettled.body.ticket.claimedByRetailerId).toBe(retailerOne.id);
 
         const payoutAutoSettled = await request(app)
           .post(`/api/retail/tickets/${autoSettledTicketId}/payout`)

@@ -4,14 +4,15 @@ import { HttpError } from '../lib/http';
 import {
   findRetailerByUsername,
   getRetailTicketByTicketId,
-  claimRetailTicket,
   listRetailTicketsByRetailer,
+  getRetailProfitSummaryByRetailer,
   payoutRetailTicket,
 } from '../services/db';
 import {
   retailerLoginSchema,
   retailListQuerySchema,
   retailPayoutSchema,
+  retailReportQuerySchema,
   retailTicketParamsSchema,
 } from '../validation/retail';
 import { createRetailToken, verifyRetailerPassword } from '../services/retailAuth';
@@ -68,32 +69,6 @@ router.get(
 );
 
 router.post(
-  '/tickets/:ticketId/claim',
-  asyncHandler(async (req: Request, res: Response) => {
-    const auth = requireRetailerToken(req);
-    const parsed = retailTicketParamsSchema.safeParse(req.params);
-    if (!parsed.success) {
-      throw new HttpError(400, 'INVALID_TICKET_ID', 'Invalid ticket id');
-    }
-
-    await settleRetailTicketIfDecidable(parsed.data.ticketId);
-
-    const claimed = await claimRetailTicket(parsed.data.ticketId, auth.retailerId);
-    if (!claimed) {
-      const ticket = await getRetailTicketByTicketId(parsed.data.ticketId);
-      if (!ticket) {
-        throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
-      }
-      if (ticket.claimedByRetailerId && ticket.claimedByRetailerId !== auth.retailerId) {
-        throw new HttpError(409, 'TICKET_ALREADY_CLAIMED', 'Ticket already claimed by another retailer');
-      }
-      throw new HttpError(409, 'TICKET_NOT_CLAIMABLE', `Ticket cannot be claimed in status ${ticket.status}`);
-    }
-    res.json({ ok: true, ticket: claimed });
-  }),
-);
-
-router.post(
   '/tickets/:ticketId/payout',
   asyncHandler(async (req: Request, res: Response) => {
     const auth = requireRetailerToken(req);
@@ -145,5 +120,28 @@ router.get(
     }
     const tickets = await listRetailTicketsByRetailer(auth.retailerId, parsed.data.status);
     res.json({ ok: true, tickets });
+  }),
+);
+
+router.get(
+  '/my/reports/summary',
+  asyncHandler(async (req: Request, res: Response) => {
+    const auth = requireRetailerToken(req);
+    const parsed = retailReportQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw new HttpError(400, 'INVALID_QUERY', 'Invalid retail report query');
+    }
+
+    const now = new Date();
+    const to = parsed.data.to ?? now;
+    const from = parsed.data.from ?? new Date(to.getTime() - 1000 * 60 * 60 * 24 * 7);
+
+    const summary = await getRetailProfitSummaryByRetailer({
+      retailerId: auth.retailerId,
+      from,
+      to,
+    });
+
+    res.json({ ok: true, summary });
   }),
 );

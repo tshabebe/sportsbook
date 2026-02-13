@@ -35,8 +35,40 @@ export const retailListQuerySchema = z
   })
   .strict();
 
+const reportDateParamSchema = z
+  .string()
+  .min(1)
+  .transform((raw, ctx) => {
+    const numeric = Number(raw);
+    const date = Number.isFinite(numeric) ? new Date(numeric) : new Date(raw);
+    if (Number.isNaN(date.getTime())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid date value',
+      });
+      return z.NEVER;
+    }
+    return date;
+  });
+
+export const retailReportQuerySchema = z
+  .object({
+    from: reportDateParamSchema.optional(),
+    to: reportDateParamSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.from && value.to && value.from.getTime() > value.to.getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['from'],
+        message: '`from` must be before `to`',
+      });
+    }
+  });
+
 export type RetailerLoginInput = z.infer<typeof retailerLoginSchema>;
 export type RetailTicketParamsInput = z.infer<typeof retailTicketParamsSchema>;
 export type RetailPayoutInput = z.infer<typeof retailPayoutSchema>;
 export type RetailListQueryInput = z.infer<typeof retailListQuerySchema>;
-
+export type RetailReportQueryInput = z.infer<typeof retailReportQuerySchema>;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
-import { X, Ticket, Copy, Share2, FileText, ChevronLeft } from 'lucide-react';
+import { X, Ticket, Copy, Share2, FileText, ChevronLeft, Printer } from 'lucide-react';
 import {
   Button as AriaButton,
   Dialog,
@@ -29,6 +29,7 @@ import type { BetMode } from '../types/backendSchemas';
 import { calculateBetSlipPreview } from '../lib/betslip';
 import { getAuthToken } from '../lib/auth';
 import { useWalletProfile } from '../hooks/useWallet';
+import { printRetailTicket } from '../lib/retailPrint';
 
 import { useMyBets } from '../hooks/useMyBets';
 
@@ -49,6 +50,20 @@ type ValidationResult = {
   ok?: boolean;
   error?: string | { message?: string };
 };
+type BetslipSelectionView = {
+  id: string;
+  fixtureName: string;
+  marketName: string;
+  selectionName: string;
+  odds: number;
+  fixtureDate?: string;
+};
+type BookedTicket = {
+  code: string;
+  bets: BetslipSelectionView[];
+  date: string;
+  stake: number;
+};
 
 const getResultErrorMessage = (results: ValidationResult[] | undefined): string => {
   if (!results || results.length === 0) return 'Validation failed';
@@ -67,7 +82,7 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
   const [walletBetRef, setWalletBetRef] = useState<string | null>(null);
   const [showWalletDialog, setShowWalletDialog] = useState(false);
   const [viewingTicketCode, setViewingTicketCode] = useState<string | null>(null);
-  const [bookedTickets, setBookedTickets] = useState<Array<{ code: string; bets: any[]; date: string; stake: number }>>(() => {
+  const [bookedTickets, setBookedTickets] = useState<BookedTicket[]>(() => {
     const saved = localStorage.getItem('booked_tickets');
     return saved ? JSON.parse(saved) : [];
   });
@@ -196,11 +211,12 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
       if (createdCode) {
         const newTicket = {
           code: createdCode,
-          bets: [...bets],
+          bets: [...bets] as BetslipSelectionView[],
           date: new Date().toISOString(),
-          stake: stakeValue
+          stake: stakeValue,
         };
-        setBookedTickets(prev => [newTicket, ...prev]);
+        setBookedTickets((prev) => [newTicket, ...prev]);
+        printBookedTicket(newTicket);
         setViewingTicketCode(createdCode);
         setSidebarTab('mybets');
       }
@@ -246,6 +262,33 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
       } catch {
         setError('Failed to copy share link');
       }
+    }
+  };
+
+  const printBookedTicket = (ticket: BookedTicket) => {
+    const totalOdds = ticket.bets.reduce((acc, bet) => acc * Number(bet.odds || 1), 1);
+    const printed = printRetailTicket({
+      title: 'Book A Bet',
+      ticketCode: ticket.code,
+      printedAt: ticket.date,
+      mode:
+        ticket.bets.length > 1
+          ? `Multiple (${ticket.bets.length}/${ticket.bets.length})`
+          : 'Single (1/1)',
+      stake: ticket.stake,
+      potentialPayout: Number((ticket.stake * totalOdds).toFixed(2)),
+      status: 'open',
+      selections: ticket.bets.map((bet) => ({
+        fixtureName: bet.fixtureName.replace(' vs ', ' - '),
+        marketName: bet.marketName,
+        selectionName: bet.selectionName,
+        odds: Number(bet.odds || 0),
+        fixtureDate: bet.fixtureDate,
+      })),
+    });
+
+    if (!printed) {
+      setError('Popup blocked. Allow popups to print ticket.');
     }
   };
 
@@ -553,6 +596,13 @@ export function Betslip({ isOpen = true, onClose, className, initialStake = 1 }:
                 >
                   <Share2 size={16} strokeWidth={3} />
                   Share
+                </Button>
+                <Button
+                  onPress={() => printBookedTicket(activeTicket)}
+                  className="col-span-2 bg-white text-black border-none flex items-center justify-center gap-2 text-[13px] font-black py-3.5 rounded-lg active:scale-95"
+                >
+                  <Printer size={16} strokeWidth={3} />
+                  Print Ticket
                 </Button>
               </div>
               <Button onPress={() => setViewingTicketCode(null)} className="w-full bg-[#3a3a3a] text-white border-none py-3.5 font-black uppercase tracking-widest text-xs rounded-lg">Close</Button>

@@ -2,13 +2,14 @@ import { Router, Request, Response } from 'express';
 import { betSlipSchema, settleBetSchema } from '../validation/bets';
 import type { ApiBetSlipInput } from '../validation/bets';
 import {
+  createRetailBooking,
   createBetWithSelections,
   createRetailTicketForBet,
   getBetWithSelections,
   getExposureForOutcome,
+  getRetailBookingByBookCode,
   getRetailTicketByTicketId,
   listBetsWithSelections,
-  listRetailTicketsByBatchId,
   listPendingBetsByFixture,
   settleRetailTicketByBet,
   updateBetSettlement,
@@ -19,10 +20,11 @@ import { checkOddsRange, checkStake } from '../services/risk';
 import { apiFootball } from '../services/apiFootball';
 import { asyncHandler } from '../middleware/asyncHandler';
 import { HttpError } from '../lib/http';
-import { requireBearerToken } from './utils';
+import { requireBearerToken, requireRetailerToken } from './utils';
 import { expandBetSlipLines, totalPotentialPayout } from '../services/betModes';
 import { ensureSufficientBalance } from '../services/balance';
 import { generateRetailBookCode } from '../services/bookCode';
+import { normalizeSlipForSelections } from '../services/slipNormalization';
 import {
   extractSelectionDetailsFromSnapshot,
   isFixtureBlockedForPlacement,
@@ -31,7 +33,8 @@ import {
   loadMarketCatalog,
   validateMarketForPlacement,
 } from '../services/marketCatalog';
-import { normalizeBookCodeRoot, rebuildSlipFromStoredLines } from '../services/recreateSlip';
+import { normalizeBookCodeRoot } from '../services/recreateSlip';
+import { z } from 'zod';
 
 export const router = Router();
 
@@ -60,72 +63,168 @@ const validateSlipSelections = async (
   slip: ApiBetSlipInput,
   withExposure: boolean,
 ) => {
-  const lines = expandBetSlipLines(slip);
+  const selectionStubResults = slip.selections.map((selection) => ({
+    lineKey: 'line_0',
+    selection,
+  }));
+
   let marketCatalog;
   try {
     marketCatalog = await loadMarketCatalog();
   } catch {
-    const unavailableResults = lines.flatMap((line) =>
-      line.selections.map((selection) => ({
-        lineKey: line.key,
-        selection,
+    return {
+      slip,
+      lines: [] as ReturnType<typeof expandBetSlipLines>,
+      results: selectionStubResults.map((entry) => ({
+        ...entry,
         ok: false as const,
         error: {
           code: 'MARKET_CATALOG_UNAVAILABLE',
           message: 'Market catalog unavailable',
         },
       })),
-    );
-    return { lines, results: unavailableResults, ok: false };
+      removedSelections: [] as ApiBetSlipInput['selections'],
+      ok: false,
+    };
   }
 
   if (marketCatalog.size === 0) {
-    const emptyCatalogResults = lines.flatMap((line) =>
-      line.selections.map((selection) => ({
-        lineKey: line.key,
-        selection,
+    return {
+      slip,
+      lines: [] as ReturnType<typeof expandBetSlipLines>,
+      results: selectionStubResults.map((entry) => ({
+        ...entry,
         ok: false as const,
         error: {
           code: 'MARKET_CATALOG_UNAVAILABLE',
           message: 'Market catalog is empty',
         },
       })),
-    );
-    return { lines, results: emptyCatalogResults, ok: false };
+      removedSelections: [] as ApiBetSlipInput['selections'],
+      ok: false,
+    };
   }
 
-  const results = await Promise.all(
+  const fixtureStatusCache = new Map<number, string | undefined>();
+  const validSelections: ApiBetSlipInput['selections'] = [];
+  const removedSelections: ApiBetSlipInput['selections'] = [];
+  const precheckResults: Array<{
+    lineKey: string;
+    selection: ApiBetSlipInput['selections'][number];
+    ok: boolean;
+    dropped?: boolean;
+    error?: { code: string; message: string; details?: unknown };
+  }> = [];
+
+  for (const selection of slip.selections) {
+    const marketValidation = validateMarketForPlacement(
+      selection.betId,
+      marketCatalog,
+    );
+    if (!marketValidation.ok) {
+      precheckResults.push({
+        lineKey: 'line_0',
+        selection,
+        ok: false,
+        error: {
+          code: marketValidation.code,
+          message: marketValidation.message,
+          details: marketValidation.details,
+        },
+      });
+      continue;
+    }
+
+    let fixtureStatus = fixtureStatusCache.get(selection.fixtureId);
+    if (fixtureStatus === undefined && !fixtureStatusCache.has(selection.fixtureId)) {
+      try {
+        const fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
+        fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
+        fixtureStatusCache.set(selection.fixtureId, fixtureStatus);
+      } catch {
+        precheckResults.push({
+          lineKey: 'line_0',
+          selection,
+          ok: false,
+          error: { code: 'FIXTURE_UNAVAILABLE', message: 'Fixture provider unavailable' },
+        });
+        continue;
+      }
+    }
+
+    if (isFixtureBlockedForPlacement(fixtureStatus)) {
+      removedSelections.push(selection);
+      precheckResults.push({
+        lineKey: 'line_0',
+        selection,
+        ok: true,
+        dropped: true,
+        error: {
+          code: 'SELECTION_EXPIRED_REMOVED',
+          message: 'Selection removed because fixture is in play or finished',
+          details: { fixtureId: selection.fixtureId, fixtureStatus },
+        },
+      });
+      continue;
+    }
+
+    validSelections.push(selection);
+  }
+
+  const fatalPrecheck = precheckResults.filter((result) => !result.ok);
+  if (fatalPrecheck.length > 0) {
+    return {
+      slip,
+      lines: [] as ReturnType<typeof expandBetSlipLines>,
+      results: precheckResults,
+      removedSelections,
+      ok: false,
+    };
+  }
+
+  const normalizedSlip = normalizeSlipForSelections(slip, validSelections);
+  if (!normalizedSlip) {
+    return {
+      slip,
+      lines: [] as ReturnType<typeof expandBetSlipLines>,
+      results: [
+        ...precheckResults,
+        ...selectionStubResults.map((entry) => ({
+          ...entry,
+          ok: false as const,
+          error: {
+            code: 'NO_VALID_SELECTIONS',
+            message: 'All selections are expired or unavailable',
+          },
+        })),
+      ],
+      removedSelections,
+      ok: false,
+    };
+  }
+
+  const lines = expandBetSlipLines(normalizedSlip);
+  const oddsSnapshotByFixture = new Map<number, unknown>();
+
+  const lineResults = await Promise.all(
     lines.flatMap((line) =>
       line.selections.map(async (selection) => {
-        const marketValidation = validateMarketForPlacement(
-          selection.betId,
-          marketCatalog,
-        );
-        if (!marketValidation.ok) {
-          return {
-            lineKey: line.key,
-            selection,
-            ok: false,
-            error: {
-              code: marketValidation.code,
-              message: marketValidation.message,
-              details: marketValidation.details,
-            },
-          };
+        let oddsData = oddsSnapshotByFixture.get(selection.fixtureId);
+        if (!oddsData) {
+          try {
+            oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
+            oddsSnapshotByFixture.set(selection.fixtureId, oddsData);
+          } catch {
+            return {
+              lineKey: line.key,
+              selection,
+              ok: false,
+              error: { code: 'ODDS_UNAVAILABLE', message: 'Odds provider unavailable' },
+            };
+          }
         }
-
-        let oddsData;
-        try {
-          oddsData = await apiFootball.proxy('/odds', { fixture: selection.fixtureId });
-        } catch {
-          return {
-            lineKey: line.key,
-            selection,
-            ok: false,
-            error: { code: 'ODDS_UNAVAILABLE', message: 'Odds provider unavailable' },
-          };
-        }
-        if (!oddsData || !oddsData.response || !oddsData.response.length) {
+        const oddsPayload = oddsData as { response?: unknown[] } | undefined;
+        if (!oddsPayload || !oddsPayload.response || !oddsPayload.response.length) {
           return {
             lineKey: line.key,
             selection,
@@ -134,29 +233,8 @@ const validateSlipSelections = async (
           };
         }
 
-        let fixtureData;
-        try {
-          fixtureData = await apiFootball.proxy('/fixtures', { id: selection.fixtureId });
-        } catch {
-          return {
-            lineKey: line.key,
-            selection,
-            ok: false,
-            error: { code: 'FIXTURE_UNAVAILABLE', message: 'Fixture provider unavailable' },
-          };
-        }
-        const fixtureStatus = fixtureData.response?.[0]?.fixture?.status?.short;
-        if (isFixtureBlockedForPlacement(fixtureStatus)) {
-          return {
-            lineKey: line.key,
-            selection,
-            ok: false,
-            error: { code: 'IN_PLAY', message: 'Fixture is in play or finished' },
-          };
-        }
-
         const detail = extractSelectionDetailsFromSnapshot(
-          oddsData,
+          oddsPayload,
           selection,
           selection.fixtureId,
         );
@@ -217,7 +295,14 @@ const validateSlipSelections = async (
     ),
   );
 
-  return { lines, results, ok: results.every((r) => r.ok) };
+  const results = [...lineResults, ...precheckResults];
+  return {
+    slip: normalizedSlip,
+    lines,
+    results,
+    removedSelections,
+    ok: lineResults.every((r) => r.ok),
+  };
 };
 
 type FixtureLookupMeta = {
@@ -276,16 +361,15 @@ router.post(
       throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
     }
     const slip: ApiBetSlipInput = parsed.data;
-    const riskCheck = checkSlipRisk(slip);
+    const validation = await validateSlipSelections(slip, true);
+    const riskCheck = checkSlipRisk(validation.slip);
     if (!riskCheck.ok) {
-      res.json({ ok: false, error: riskCheck });
+      res.json({ ok: false, error: riskCheck, results: validation.results });
       return;
     }
-
-    const validation = await validateSlipSelections(slip, true);
     res.json({
       ok: validation.ok,
-      mode: slip.mode,
+      mode: validation.slip.mode,
       lines: validation.lines.map((line) => ({
         key: line.key,
         stake: line.stake,
@@ -294,6 +378,11 @@ router.post(
       })),
       totalPotentialPayout: totalPotentialPayout(validation.lines),
       results: validation.results,
+      removedSelections: validation.removedSelections.map((selection) => ({
+        fixtureId: selection.fixtureId,
+        betId: selection.betId,
+        value: selection.value,
+      })),
     });
   }),
 );
@@ -307,12 +396,12 @@ router.post(
       throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
     }
     const slip: ApiBetSlipInput = parsed.data;
-    const riskCheck = checkSlipRisk(slip);
+    const validation = await validateSlipSelections(slip, true);
+    const riskCheck = checkSlipRisk(validation.slip);
     if (!riskCheck.ok) {
       res.status(409).json({ ok: false, error: riskCheck });
       return;
     }
-    const validation = await validateSlipSelections(slip, true);
     if (!validation.ok) {
       res.status(409).json({
         ok: false,
@@ -360,7 +449,7 @@ router.post(
     try {
       for (const [index, line] of validation.lines.entries()) {
         const lineSlip: ApiBetSlipInput = {
-          ...slip,
+          ...validation.slip,
           selections: line.selections,
           stake: line.stake,
           mode: 'multiple',
@@ -401,8 +490,8 @@ router.post(
       ok: true,
       ticket: {
         ticketRef: betRef,
-        mode: slip.mode,
-        totalStake: slip.stake,
+        mode: validation.slip.mode,
+        totalStake: validation.slip.stake,
         totalPotentialPayout: totalPotentialPayout(validation.lines),
         lineCount: lineBets.length,
       },
@@ -418,13 +507,78 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
     throw new HttpError(400, 'INVALID_BETSLIP', 'Invalid betslip', parsed.error.flatten());
   }
   const slip: ApiBetSlipInput = parsed.data;
-  const riskCheck = checkSlipRisk(slip);
+  const validation = await validateSlipSelections(slip, false);
+  const riskCheck = checkSlipRisk(validation.slip);
   if (!riskCheck.ok) {
     res.status(409).json({ ok: false, error: riskCheck });
     return;
   }
+  if (!validation.ok) {
+    res.status(409).json({
+      ok: false,
+      reason: validationFailureReason(validation.results),
+      validation: validation.results,
+    });
+    return;
+  }
 
+  const bookCode = generateRetailBookCode();
+  const booking = await createRetailBooking({
+    bookCode,
+    slipJson: validation.slip,
+  });
+
+  res.json({
+    ok: true,
+    bookCode,
+    booking: {
+      id: booking.id,
+      bookCode: booking.bookCode,
+      createdAt: booking.createdAt,
+    },
+    mode: validation.slip.mode,
+    totalStake: validation.slip.stake,
+    totalPotentialPayout: totalPotentialPayout(validation.lines),
+    lineCount: validation.lines.length,
+    removedSelections: validation.removedSelections.map((selection) => ({
+      fixtureId: selection.fixtureId,
+      betId: selection.betId,
+      value: selection.value,
+    })),
+  });
+};
+
+const issueRetailBookingSchema = z
+  .object({
+    bookCode: z.string().min(6).max(64),
+  })
+  .strict();
+
+const issueRetailTicketFromBooking = async (req: Request, res: Response) => {
+  const auth = requireRetailerToken(req);
+  const parsed = issueRetailBookingSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new HttpError(400, 'INVALID_BOOK_CODE', 'Invalid book code payload', parsed.error.flatten());
+  }
+
+  const rootBookCode = normalizeBookCodeRoot(parsed.data.bookCode);
+  const booking = await getRetailBookingByBookCode(rootBookCode);
+  if (!booking) {
+    throw new HttpError(404, 'BOOK_CODE_NOT_FOUND', 'Book code not found');
+  }
+
+  const slipParsed = betSlipSchema.safeParse(booking.slipJson);
+  if (!slipParsed.success) {
+    throw new HttpError(500, 'BOOKING_CORRUPTED', 'Stored booking is invalid');
+  }
+
+  const slip = slipParsed.data;
   const validation = await validateSlipSelections(slip, false);
+  const riskCheck = checkSlipRisk(validation.slip);
+  if (!riskCheck.ok) {
+    res.status(409).json({ ok: false, error: riskCheck });
+    return;
+  }
   if (!validation.ok) {
     res.status(409).json({
       ok: false,
@@ -438,10 +592,11 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3); // 72h claim window
   const tickets = [];
   const bets = [];
+
   for (const [index, line] of validation.lines.entries()) {
     const ticketId = index === 0 ? rootTicketId : `${rootTicketId}-${index + 1}`;
     const lineSlip: ApiBetSlipInput = {
-      ...slip,
+      ...validation.slip,
       selections: line.selections,
       stake: line.stake,
       mode: 'multiple',
@@ -459,7 +614,13 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
     if (!betId) {
       throw new HttpError(500, 'BET_CREATION_FAILED', 'Failed to create retail bet');
     }
-    const ticket = await createRetailTicketForBet({ ticketId, betId, expiresAt });
+    const ticket = await createRetailTicketForBet({
+      ticketId,
+      betId,
+      expiresAt,
+      claimedByRetailerId: auth.retailerId,
+      sourceBookCode: rootBookCode,
+    });
     const bet = await getBetWithSelections(betId);
     tickets.push(ticket);
     bets.push(bet);
@@ -467,24 +628,28 @@ const placeRetailTicketFromSlip = async (req: Request, res: Response) => {
 
   res.json({
     ok: true,
-    bookCode: rootTicketId,
+    sourceBookCode: rootBookCode,
     ticketBatchId: rootTicketId,
-    mode: slip.mode,
-    totalStake: slip.stake,
+    mode: validation.slip.mode,
+    totalStake: validation.slip.stake,
     totalPotentialPayout: totalPotentialPayout(validation.lines),
     lineCount: validation.lines.length,
+    issuedByRetailerId: auth.retailerId,
     tickets: tickets.map((ticket) => ({
       ticketId: ticket.ticketId,
       status: ticket.status,
       expiresAt: ticket.expiresAt,
+      sourceBookCode: ticket.sourceBookCode,
+      claimedByRetailerId: ticket.claimedByRetailerId,
+      claimedAt: ticket.claimedAt,
     })),
-    bets,
-    ticket: {
-      ticketId: tickets[0]?.ticketId ?? rootTicketId,
-      status: tickets[0]?.status ?? 'open',
-      expiresAt: tickets[0]?.expiresAt ?? null,
-    },
+    removedSelections: validation.removedSelections.map((selection) => ({
+      fixtureId: selection.fixtureId,
+      betId: selection.betId,
+      value: selection.value,
+    })),
     bet: bets[0] ?? null,
+    bets,
   });
 };
 
@@ -494,8 +659,8 @@ router.post(
 );
 
 router.post(
-  '/tickets',
-  asyncHandler(placeRetailTicketFromSlip),
+  '/retail/tickets/issue',
+  asyncHandler(issueRetailTicketFromBooking),
 );
 
 router.get(
@@ -507,24 +672,16 @@ router.get(
     }
 
     const bookCode = normalizeBookCodeRoot(requestedTicketId);
-    const sourceTickets = await listRetailTicketsByBatchId(bookCode);
-    if (sourceTickets.length === 0) {
-      throw new HttpError(404, 'TICKET_NOT_FOUND', 'Ticket not found');
+    const booking = await getRetailBookingByBookCode(bookCode);
+    if (!booking) {
+      throw new HttpError(404, 'BOOK_CODE_NOT_FOUND', 'Book code not found');
     }
 
-    const slip = rebuildSlipFromStoredLines(
-      sourceTickets.map((ticket) => ({
-        stake: ticket.bet.stake,
-        selections: ticket.bet.selections.map((selection) => ({
-          fixtureId: selection.fixtureId,
-          marketBetId: selection.marketBetId,
-          value: selection.value,
-          odd: selection.odd,
-          handicap: selection.handicap,
-          bookmakerId: selection.bookmakerId,
-        })),
-      })),
-    );
+    const storedSlip = betSlipSchema.safeParse(booking.slipJson);
+    if (!storedSlip.success) {
+      throw new HttpError(500, 'BOOKING_CORRUPTED', 'Stored booking is invalid');
+    }
+    const slip: ApiBetSlipInput = storedSlip.data;
 
     const fixtureLookup = new Map<number, FixtureLookupMeta>();
     const fixtureIds = Array.from(
@@ -607,12 +764,10 @@ router.get(
       bookCode,
       slip,
       bets,
-      sourceTickets: sourceTickets.map((ticket) => ({
-        ticketId: ticket.ticketId,
-        status: ticket.status,
-        createdAt: ticket.createdAt,
-        expiresAt: ticket.expiresAt,
-      })),
+      booking: {
+        id: booking.id,
+        createdAt: booking.createdAt,
+      },
     });
   }),
 );
@@ -636,6 +791,7 @@ router.get(
         ticketId: ticket.ticketId,
         status: ticket.status,
         createdAt: ticket.createdAt,
+        sourceBookCode: ticket.sourceBookCode,
         claimedByRetailerId: ticket.claimedByRetailerId,
         claimedAt: ticket.claimedAt,
         paidAt: ticket.paidAt,

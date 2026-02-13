@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   bets,
@@ -18,6 +18,12 @@ import {
   retailersSelectSchema,
   type DbRetailerSelect,
 } from '../db/schema/retailers';
+import {
+  retailBookings,
+  retailBookingsInsertSchema,
+  retailBookingsSelectSchema,
+  type DbRetailBookingSelect,
+} from '../db/schema/retailBookings';
 import {
   retailTickets,
   retailTicketsInsertSchema,
@@ -210,15 +216,45 @@ export const findRetailerByUsername = async (
   return retailersSelectSchema.parse(row);
 };
 
+export const createRetailBooking = async (input: {
+  bookCode: string;
+  slipJson: unknown;
+}): Promise<DbRetailBookingSelect> => {
+  const row = retailBookingsInsertSchema.parse({
+    bookCode: input.bookCode,
+    slipJson: input.slipJson,
+  });
+  const [inserted] = await db.insert(retailBookings).values(row).returning();
+  return retailBookingsSelectSchema.parse(inserted);
+};
+
+export const getRetailBookingByBookCode = async (
+  bookCode: string,
+): Promise<DbRetailBookingSelect | null> => {
+  const [row] = await db
+    .select()
+    .from(retailBookings)
+    .where(eq(retailBookings.bookCode, bookCode))
+    .limit(1);
+  if (!row) return null;
+  return retailBookingsSelectSchema.parse(row);
+};
+
 export const createRetailTicketForBet = async (input: {
   ticketId: string;
   betId: number;
   expiresAt?: Date | null;
+  claimedByRetailerId?: number;
+  sourceBookCode?: string | null;
 }) => {
+  const isClaimed = Number.isFinite(input.claimedByRetailerId);
   const ticketRow = retailTicketsInsertSchema.parse({
     ticketId: input.ticketId,
     betId: input.betId,
-    status: 'open',
+    status: isClaimed ? 'claimed' : 'open',
+    sourceBookCode: input.sourceBookCode ?? null,
+    claimedByRetailerId: isClaimed ? input.claimedByRetailerId : null,
+    claimedAt: isClaimed ? new Date() : null,
     expiresAt: input.expiresAt ?? null,
   });
   const [inserted] = await db.insert(retailTickets).values(ticketRow).returning();
@@ -229,6 +265,14 @@ export const createRetailTicketForBet = async (input: {
     actorType: 'system',
     payloadJson: { betId: parsed.betId },
   });
+  if (isClaimed && input.claimedByRetailerId !== undefined) {
+    await appendRetailTicketEvent({
+      ticketId: parsed.ticketId,
+      eventType: 'claimed',
+      actorType: 'retailer',
+      actorId: String(input.claimedByRetailerId),
+    });
+  }
   return parsed;
 };
 
@@ -246,86 +290,6 @@ export const getRetailTicketByTicketId = async (
   const bet = await getBetWithSelections(parsedTicket.betId);
   if (!bet) return null;
   return { ...parsedTicket, bet };
-};
-
-export const listRetailTicketsByBatchId = async (
-  batchId: string,
-): Promise<DbRetailTicketWithBet[]> => {
-  const rows = await db
-    .select()
-    .from(retailTickets)
-    .where(
-      or(
-        eq(retailTickets.ticketId, batchId),
-        like(retailTickets.ticketId, `${batchId}-%`),
-      ),
-    )
-    .orderBy(asc(retailTickets.id));
-
-  const tickets = await Promise.all(
-    rows.map(async (row) => {
-      const parsedTicket = retailTicketsSelectSchema.parse(row);
-      const bet = await getBetWithSelections(parsedTicket.betId);
-      if (!bet) return null;
-      return { ...parsedTicket, bet };
-    }),
-  );
-
-  return tickets.filter(
-    (ticket): ticket is DbRetailTicketWithBet => ticket !== null,
-  );
-};
-
-export const claimRetailTicket = async (ticketId: string, retailerId: number) => {
-  let [updated] = await db
-    .update(retailTickets)
-    .set(
-      retailTicketsUpdateSchema.parse({
-        status: 'claimed',
-        claimedByRetailerId: retailerId,
-        claimedAt: new Date(),
-      }),
-    )
-    .where(
-      and(
-        eq(retailTickets.ticketId, ticketId),
-        eq(retailTickets.status, 'open'),
-        sql`${retailTickets.claimedByRetailerId} is null`,
-      ),
-    )
-    .returning();
-
-  // A winning ticket may already be auto-settled before claim.
-  // In that case we attach ownership while preserving settled status.
-  if (!updated) {
-    [updated] = await db
-      .update(retailTickets)
-      .set(
-        retailTicketsUpdateSchema.parse({
-          status: 'settled_won_unpaid',
-          claimedByRetailerId: retailerId,
-          claimedAt: new Date(),
-        }),
-      )
-      .where(
-        and(
-          eq(retailTickets.ticketId, ticketId),
-          eq(retailTickets.status, 'settled_won_unpaid'),
-          sql`${retailTickets.claimedByRetailerId} is null`,
-        ),
-      )
-      .returning();
-  }
-
-  if (!updated) return null;
-  const parsed = retailTicketsSelectSchema.parse(updated);
-  await appendRetailTicketEvent({
-    ticketId: parsed.ticketId,
-    eventType: 'claimed',
-    actorType: 'retailer',
-    actorId: String(retailerId),
-  });
-  return parsed;
 };
 
 export const listRetailTicketsByRetailer = async (
@@ -350,6 +314,90 @@ export const listRetailTicketsByRetailer = async (
     )
     .orderBy(desc(retailTickets.id));
   return rows.map((row) => retailTicketsSelectSchema.parse(row));
+};
+
+const toNumeric = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+export const getRetailProfitSummaryByRetailer = async (input: {
+  retailerId: number;
+  from: Date;
+  to: Date;
+}) => {
+  const { retailerId, from, to } = input;
+
+  const [salesRow] = await db
+    .select({
+      totalStake: sql<string>`coalesce(sum(${bets.stake}), 0)`,
+      ticketsCount: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .innerJoin(bets, eq(retailTickets.betId, bets.id))
+    .where(
+      and(
+        eq(retailTickets.claimedByRetailerId, retailerId),
+        sql`${retailTickets.createdAt} >= ${from}`,
+        sql`${retailTickets.createdAt} <= ${to}`,
+      ),
+    );
+
+  const [payoutRow] = await db
+    .select({
+      totalPayout: sql<string>`coalesce(sum(${retailTickets.payoutAmount}), 0)`,
+      paidTicketsCount: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .where(
+      and(
+        eq(retailTickets.paidByRetailerId, retailerId),
+        eq(retailTickets.status, 'paid'),
+        sql`${retailTickets.paidAt} is not null`,
+        sql`${retailTickets.paidAt} >= ${from}`,
+        sql`${retailTickets.paidAt} <= ${to}`,
+      ),
+    );
+
+  const statusRows = await db
+    .select({
+      status: retailTickets.status,
+      count: sql<number>`count(*)`,
+    })
+    .from(retailTickets)
+    .where(
+      and(
+        eq(retailTickets.claimedByRetailerId, retailerId),
+        sql`${retailTickets.createdAt} >= ${from}`,
+        sql`${retailTickets.createdAt} <= ${to}`,
+      ),
+    )
+    .groupBy(retailTickets.status);
+
+  const byStatus = statusRows.reduce(
+    (acc, row) => {
+      if (row.status) {
+        acc[row.status] = Number(row.count ?? 0);
+      }
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  const totalStake = Number(toNumeric(salesRow?.totalStake).toFixed(2));
+  const totalPaidOut = Number(toNumeric(payoutRow?.totalPayout).toFixed(2));
+  const netProfit = Number((totalStake - totalPaidOut).toFixed(2));
+
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    totalStake,
+    totalPaidOut,
+    netProfit,
+    ticketsCount: Number(salesRow?.ticketsCount ?? 0),
+    paidTicketsCount: Number(payoutRow?.paidTicketsCount ?? 0),
+    byStatus,
+  };
 };
 
 export const payoutRetailTicket = async (input: {
