@@ -156,16 +156,16 @@ const formatStatusLabel = (status: string): string => {
 const statusBadgeClass = (status?: string): string => {
   switch (status) {
     case 'paid':
-      return 'border-green-500/40 bg-green-500/10 text-green-500';
+      return 'border-status-positive/40 bg-status-positive-soft text-status-positive';
     case 'settled_won_unpaid':
-      return 'border-amber-500/40 bg-amber-500/10 text-amber-500';
+      return 'border-status-warning/40 bg-status-warning-soft text-status-warning';
     case 'settled_lost':
     case 'expired':
-      return 'border-red-500/40 bg-red-500/10 text-red-500';
+      return 'border-status-negative/40 bg-status-negative-soft text-status-negative';
     case 'claimed':
-      return 'border-blue-500/40 bg-blue-500/10 text-blue-500';
+      return 'border-status-info/40 bg-status-info-soft text-status-info';
     case 'void':
-      return 'border-zinc-500/40 bg-zinc-500/10 text-zinc-300';
+      return 'border-border-subtle bg-app-bg text-text-muted';
     default:
       return 'border-border-subtle bg-element-hover-bg text-text-muted';
   }
@@ -572,23 +572,23 @@ export function RetailDashboardPage() {
   ]);
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <div className="pointer-events-none fixed right-4 top-4 z-50 flex w-[min(92vw,360px)] flex-col gap-2">
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`pointer-events-auto rounded-lg border px-3 py-2 shadow-lg backdrop-blur ${
               toast.kind === 'success'
-                ? 'border-green-500/40 bg-green-500/10 text-green-500'
+                ? 'border-status-positive/40 bg-status-positive-soft text-status-positive'
                 : toast.kind === 'error'
-                  ? 'border-red-500/40 bg-red-500/10 text-red-500'
-                  : 'border-blue-500/40 bg-blue-500/10 text-blue-400'
+                  ? 'border-status-negative/40 bg-status-negative-soft text-status-negative'
+                  : 'border-status-info/40 bg-status-info-soft text-status-info'
             }`}
           >
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="flex flex-col gap-0.5">
                 <p className="text-sm font-semibold">{toast.title}</p>
-                {toast.detail ? <p className="mt-0.5 text-xs opacity-90">{toast.detail}</p> : null}
+                {toast.detail ? <p className="text-xs opacity-90">{toast.detail}</p> : null}
               </div>
               <button
                 type="button"
@@ -603,9 +603,12 @@ export function RetailDashboardPage() {
       </div>
 
       {activeTab === 'work' ? (
-        <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
-          <div className="grid gap-2 md:grid-cols-2">
-            <form onSubmit={handleIssueSubmit(issueTicketFromBookCode)} className="flex items-start gap-2">
+        <section className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+          <div className="flex flex-wrap gap-2">
+            <form
+              onSubmit={handleIssueSubmit(issueTicketFromBookCode)}
+              className="flex w-full items-start gap-2 md:w-[calc((100%-0.5rem)/2)]"
+            >
               <TextField className="min-w-0 flex-1">
                 <Label className="sr-only">Book code</Label>
                 <Input
@@ -619,7 +622,10 @@ export function RetailDashboardPage() {
               </Button>
             </form>
 
-            <form onSubmit={handleLookupSubmit(lookupTicket)} className="flex items-start gap-2">
+            <form
+              onSubmit={handleLookupSubmit(lookupTicket)}
+              className="flex w-full items-start gap-2 md:w-[calc((100%-0.5rem)/2)]"
+            >
               <TextField className="min-w-0 flex-1">
                 <Label className="sr-only">Ticket ID</Label>
                 <Input
@@ -635,24 +641,24 @@ export function RetailDashboardPage() {
           </div>
 
           {issueErrors.bookCode ? (
-            <p className="mt-2 text-xs text-red-500">{issueErrors.bookCode.message}</p>
+            <p className="text-xs text-status-negative">{issueErrors.bookCode.message}</p>
           ) : null}
           {lookupErrors.ticketId ? (
-            <p className="mt-2 text-xs text-red-500">{lookupErrors.ticketId.message}</p>
+            <p className="text-xs text-status-negative">{lookupErrors.ticketId.message}</p>
           ) : null}
 
           {deskError ? (
-            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+            <div className="rounded-lg border border-status-negative/40 bg-status-negative-soft px-3 py-2 text-sm text-status-negative">
               {deskError}
             </div>
           ) : null}
 
           {issuedBatch ? (
-            <div className="mt-3 rounded-lg border border-border-subtle bg-app-bg px-3 py-2">
+            <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-app-bg px-3 py-2">
               <p className="text-sm">
                 {issuedBatch.sourceBookCode} • {issuedBatch.ticketBatchId || '-'} • {issuedBatch.lineCount} lines
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2">
                 {issuedBatch.tickets.map((issued) => (
                   <button
                     key={issued.ticketId}
@@ -670,33 +676,33 @@ export function RetailDashboardPage() {
           ) : null}
 
           {ticket ? (
-            <div className="mt-3 rounded-lg border border-border-subtle p-3">
-              <div className="mb-2 flex items-center gap-2">
+            <div className="flex flex-col gap-2 rounded-lg border border-border-subtle p-3">
+              <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold">{ticket.ticketId}</p>
                 <span className={`rounded-full border px-2 py-0.5 text-[11px] ${statusBadgeClass(ticket.status)}`}>
                   {formatStatusLabel(ticket.status)}
                 </span>
               </div>
 
-              <div className="grid gap-2 text-sm md:grid-cols-2">
-                <p>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <p className="w-full md:w-[calc((100%-0.5rem)/2)]">
                   <span className="text-text-muted">Stake:</span>{' '}
                   {ticket.bet?.stake ? formatCurrency(toNumber(ticket.bet.stake)) : '-'}
                 </p>
-                <p>
+                <p className="w-full md:w-[calc((100%-0.5rem)/2)]">
                   <span className="text-text-muted">Payout:</span>{' '}
                   {ticket.payoutAmount ? formatCurrency(toNumber(ticket.payoutAmount)) : '-'}
                 </p>
-                <p>
+                <p className="w-full md:w-[calc((100%-0.5rem)/2)]">
                   <span className="text-text-muted">Created:</span> {formatDateTime(ticket.createdAt)}
                 </p>
-                <p>
+                <p className="w-full md:w-[calc((100%-0.5rem)/2)]">
                   <span className="text-text-muted">Paid:</span> {formatDateTime(ticket.paidAt)}
                 </p>
               </div>
 
-              <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end">
-                <TextField className="md:min-w-[240px]">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end">
+                <TextField className="w-full md:min-w-[240px]">
                   <Label className="sr-only">Payout reference</Label>
                   <Input
                     {...registerPayout('payoutReference')}
@@ -716,7 +722,7 @@ export function RetailDashboardPage() {
                 </Button>
               </div>
               {payoutErrors.payoutReference ? (
-                <p className="mt-2 text-xs text-red-500">{payoutErrors.payoutReference.message}</p>
+                <p className="text-xs text-status-negative">{payoutErrors.payoutReference.message}</p>
               ) : null}
             </div>
           ) : null}
@@ -725,8 +731,8 @@ export function RetailDashboardPage() {
 
       {activeTab === 'data' ? (
         <>
-          <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
-            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <section className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold">Report</h2>
                 {loadingReport ? (
@@ -767,7 +773,7 @@ export function RetailDashboardPage() {
             </div>
 
             {reportPreset === 'custom' ? (
-              <div className="mb-3 flex flex-wrap items-end gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <label className="flex flex-col gap-1 text-xs text-text-muted">
                   From
                   <input
@@ -793,39 +799,39 @@ export function RetailDashboardPage() {
             ) : null}
 
             {loadingReport && !report ? (
-              <div className="space-y-3 animate-pulse">
+              <div className="flex flex-col gap-3 animate-pulse">
                 <div className="h-4 w-56 rounded bg-element-hover-bg" />
-                <div className="grid gap-2 md:grid-cols-4">
-                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
-                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
-                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
-                  <div className="h-20 rounded border border-border-subtle bg-app-bg" />
+                <div className="flex flex-wrap gap-2">
+                  <div className="h-20 w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle bg-app-bg md:w-[calc((100%-1.5rem)/4)]" />
+                  <div className="h-20 w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle bg-app-bg md:w-[calc((100%-1.5rem)/4)]" />
+                  <div className="h-20 w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle bg-app-bg md:w-[calc((100%-1.5rem)/4)]" />
+                  <div className="h-20 w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle bg-app-bg md:w-[calc((100%-1.5rem)/4)]" />
                 </div>
                 <div className="h-6 rounded bg-element-hover-bg" />
               </div>
             ) : report ? (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 <p className="text-xs text-text-muted">
                   {formatDateTime(report.from)} to {formatDateTime(report.to)}
                 </p>
-                <div className="grid gap-2 md:grid-cols-4">
-                  <div className="rounded border border-border-subtle p-3">
+                <div className="flex flex-wrap gap-2">
+                  <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
                     <p className="text-xs text-text-muted">Total Stake</p>
                     <p className="text-lg font-semibold">{formatCurrency(report.totalStake)}</p>
                   </div>
-                  <div className="rounded border border-border-subtle p-3">
+                  <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
                     <p className="text-xs text-text-muted">Paid Out</p>
                     <p className="text-lg font-semibold">{formatCurrency(report.totalPaidOut)}</p>
                   </div>
-                  <div className="rounded border border-border-subtle p-3">
+                  <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
                     <p className="text-xs text-text-muted">Unpaid Liability</p>
-                    <p className="text-lg font-semibold text-amber-500">
+                    <p className="text-lg font-semibold text-status-warning">
                       {formatCurrency(report.outstandingPayoutAmount)}
                     </p>
                   </div>
-                  <div className="rounded border border-border-subtle p-3">
+                  <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
                     <p className="text-xs text-text-muted">Net Profit</p>
-                    <p className={`text-lg font-semibold ${report.netProfit >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    <p className={`text-lg font-semibold ${report.netProfit >= 0 ? 'text-status-positive' : 'text-status-negative'}`}>
                       {formatCurrency(report.netProfit)}
                     </p>
                   </div>
@@ -850,11 +856,11 @@ export function RetailDashboardPage() {
             ) : (
               <p className="text-sm text-text-muted">No report loaded.</p>
             )}
-            {reportError ? <p className="mt-2 text-sm text-red-500">{reportError}</p> : null}
+            {reportError ? <p className="text-sm text-status-negative">{reportError}</p> : null}
           </section>
 
-          <section className="rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
-            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <section className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-element-bg p-3 md:p-4">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold">Tickets</h2>
                 {loadingTickets ? (
@@ -880,7 +886,7 @@ export function RetailDashboardPage() {
             </div>
 
             {loadingTickets && myTickets.length === 0 ? (
-              <div className="space-y-2 animate-pulse">
+              <div className="flex flex-col gap-2 animate-pulse">
                 <div className="h-12 rounded border border-border-subtle bg-app-bg" />
                 <div className="h-12 rounded border border-border-subtle bg-app-bg" />
                 <div className="h-12 rounded border border-border-subtle bg-app-bg" />
@@ -888,7 +894,7 @@ export function RetailDashboardPage() {
             ) : sortedTickets.length === 0 ? (
               <p className="text-sm text-text-muted">No tickets loaded.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="flex flex-col gap-2">
                 {sortedTickets.map((item) => (
                   <div
                     key={item.ticketId}
@@ -917,7 +923,7 @@ export function RetailDashboardPage() {
                 ))}
               </div>
             )}
-            {ticketsError ? <p className="mt-2 text-sm text-red-500">{ticketsError}</p> : null}
+            {ticketsError ? <p className="text-sm text-status-negative">{ticketsError}</p> : null}
           </section>
         </>
       ) : null}

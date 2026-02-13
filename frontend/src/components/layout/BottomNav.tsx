@@ -10,7 +10,7 @@ export function BottomNav() {
     const betCount = bets.length;
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-[#333] bg-[#141414] py-2 pb-safe md:hidden shadow-[0_-4px_10px_rgba(0,0,0,0.3)]">
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t border-border-subtle bg-element-bg py-2 pb-safe shadow-sm md:hidden">
             <NavItem
                 to="/play"
                 testId="bottomnav-sports"
@@ -66,22 +66,26 @@ function NavItem({
     onClick?: (e: React.MouseEvent) => void;
 }) {
     return (
-        <Link data-testid={testId} to={to} onClick={onClick} className="group relative flex flex-1 flex-col items-center justify-center pt-2">
-            <div className={cn("relative transition-colors duration-200", isActive ? "text-[#ffd60a]" : "text-[#8a8a8a] group-hover:text-[#ffffff]")}>
+        <Link
+            data-testid={testId}
+            to={to}
+            onClick={onClick}
+            className="group relative flex flex-1 flex-col items-center justify-center gap-1 pt-2"
+        >
+            <div className={cn("relative transition-colors duration-200", isActive ? "text-accent-solid" : "text-text-muted group-hover:text-text-contrast")}>
                 {icon}
                 {badgeCount !== undefined && badgeCount > 0 && (
-                    <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#ef4444] text-[10px] font-bold text-white">
+                    <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-status-negative text-[10px] font-bold text-accent-text-contrast">
                         {badgeCount}
                     </span>
                 )}
             </div>
-            <span className={cn("mt-1 text-[10px] font-medium transition-colors duration-200", isActive ? "text-[#ffd60a]" : "text-[#8a8a8a] group-hover:text-[#ffffff]")}>
+            <span className={cn("text-[10px] font-medium transition-colors duration-200", isActive ? "text-accent-solid" : "text-text-muted group-hover:text-text-contrast")}>
                 {label}
             </span>
 
-            {/* Active Indicator Line */}
             {isActive && (
-                <div className="absolute bottom-0 h-[3px] w-8 rounded-t-full bg-[#ffd60a] shadow-[0_0_8px_rgba(255,214,10,0.5)]" />
+                <div className="absolute bottom-0 h-[3px] w-8 rounded-t-full bg-accent-solid shadow-sm" />
             )}
         </Link>
     );

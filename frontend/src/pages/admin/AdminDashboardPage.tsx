@@ -177,16 +177,16 @@ export function AdminDashboardPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <div className="mb-3 flex items-center justify-between">
+    <div className="flex flex-col gap-4">
+      <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-element-bg p-4">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Admin Summary</h2>
           <Button onPress={loadDashboard} isDisabled={loading} variant="outline" size="sm">
             Refresh
           </Button>
         </div>
 
-        <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end">
           <label className="flex flex-col gap-1 text-xs text-text-muted">
             From
             <input
@@ -211,26 +211,26 @@ export function AdminDashboardPage() {
         </div>
 
         {summary ? (
-          <div className="grid gap-2 md:grid-cols-4">
-            <div className="rounded border border-border-subtle p-3">
+          <div className="flex flex-wrap gap-2">
+            <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
               <p className="text-xs text-text-muted">Total Stake</p>
               <p className="text-lg font-semibold">{formatCurrency(summary.totalStake)}</p>
             </div>
-            <div className="rounded border border-border-subtle p-3">
+            <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
               <p className="text-xs text-text-muted">Paid Out</p>
               <p className="text-lg font-semibold">{formatCurrency(summary.totalPaidOut)}</p>
             </div>
-            <div className="rounded border border-border-subtle p-3">
+            <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
               <p className="text-xs text-text-muted">Unpaid Liability</p>
-              <p className="text-lg font-semibold text-amber-500">
+              <p className="text-lg font-semibold text-status-warning">
                 {formatCurrency(summary.outstandingPayoutAmount)}
               </p>
             </div>
-            <div className="rounded border border-border-subtle p-3">
+            <div className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle p-3 md:w-[calc((100%-1.5rem)/4)]">
               <p className="text-xs text-text-muted">Net Profit</p>
               <p
                 className={`text-lg font-semibold ${
-                  summary.netProfit >= 0 ? 'text-green-500' : 'text-red-500'
+                  summary.netProfit >= 0 ? 'text-status-positive' : 'text-status-negative'
                 }`}
               >
                 {formatCurrency(summary.netProfit)}
@@ -240,7 +240,7 @@ export function AdminDashboardPage() {
         ) : (
           <p className="text-sm text-text-muted">No data loaded yet.</p>
         )}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+        <div className="flex flex-wrap gap-2 text-xs">
           <span className="rounded border border-border-subtle px-2 py-1">
             Cashiers: {cashiers.length}
           </span>
@@ -259,10 +259,10 @@ export function AdminDashboardPage() {
         </div>
       </section>
 
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <h2 className="mb-3 text-lg font-semibold">Create Cashier</h2>
-        <form onSubmit={handleSubmit(onCreateCashier)} className="grid gap-2 md:grid-cols-4">
-          <TextField className="md:col-span-1">
+      <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-element-bg p-4">
+        <h2 className="text-lg font-semibold">Create Cashier</h2>
+        <form onSubmit={handleSubmit(onCreateCashier)} className="flex flex-wrap gap-2">
+          <TextField className="w-full md:w-[calc((100%-0.75rem)/4)]">
             <Label className="sr-only">Name</Label>
             <Input
               {...register('name')}
@@ -270,7 +270,7 @@ export function AdminDashboardPage() {
               className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
             />
           </TextField>
-          <TextField className="md:col-span-1">
+          <TextField className="w-full md:w-[calc((100%-0.75rem)/4)]">
             <Label className="sr-only">Username</Label>
             <Input
               {...register('username')}
@@ -278,7 +278,7 @@ export function AdminDashboardPage() {
               className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
             />
           </TextField>
-          <TextField className="md:col-span-1">
+          <TextField className="w-full md:w-[calc((100%-0.75rem)/4)]">
             <Label className="sr-only">Password</Label>
             <Input
               type="password"
@@ -287,18 +287,18 @@ export function AdminDashboardPage() {
               className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
             />
           </TextField>
-          <Button type="submit" isDisabled={loading} variant="success">
+          <Button type="submit" isDisabled={loading} variant="success" className="w-full md:w-[calc((100%-0.75rem)/4)]">
             Create
           </Button>
         </form>
-        {errors.name ? <p className="mt-2 text-xs text-red-500">{errors.name.message}</p> : null}
-        {errors.username ? <p className="mt-2 text-xs text-red-500">{errors.username.message}</p> : null}
-        {errors.password ? <p className="mt-2 text-xs text-red-500">{errors.password.message}</p> : null}
+        {errors.name ? <p className="text-xs text-status-negative">{errors.name.message}</p> : null}
+        {errors.username ? <p className="text-xs text-status-negative">{errors.username.message}</p> : null}
+        {errors.password ? <p className="text-xs text-status-negative">{errors.password.message}</p> : null}
       </section>
 
-      <section className="rounded-lg border border-border-subtle bg-element-bg p-4">
-        <h2 className="mb-3 text-lg font-semibold">Cashiers</h2>
-        <div className="space-y-2">
+      <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-element-bg p-4">
+        <h2 className="text-lg font-semibold">Cashiers</h2>
+        <div className="flex flex-col gap-2">
           {cashiers.length === 0 ? (
             <p className="text-sm text-text-muted">No cashiers found.</p>
           ) : (
@@ -317,32 +317,32 @@ export function AdminDashboardPage() {
                     <span
                       className={`rounded px-2 py-1 text-xs font-semibold ${
                         cashier.isActive
-                          ? 'bg-green-500/20 text-green-500'
-                          : 'bg-red-500/20 text-red-500'
+                          ? 'bg-status-positive-soft text-status-positive'
+                          : 'bg-status-negative-soft text-status-negative'
                       }`}
                     >
                       {cashier.isActive ? 'active' : 'inactive'}
                     </span>
                   </div>
 
-                  <div className="mt-3 grid gap-2 text-sm md:grid-cols-4">
-                    <p>Stake: {formatCurrency(cashier.totalStake)}</p>
-                    <p>Paid Out: {formatCurrency(cashier.totalPaidOut)}</p>
-                    <p>Unpaid: {formatCurrency(cashier.outstandingPayoutAmount)}</p>
+                  <div className="flex flex-wrap gap-2 text-sm">
+                    <p className="w-full md:w-[calc((100%-1.5rem)/4)]">Stake: {formatCurrency(cashier.totalStake)}</p>
+                    <p className="w-full md:w-[calc((100%-1.5rem)/4)]">Paid Out: {formatCurrency(cashier.totalPaidOut)}</p>
+                    <p className="w-full md:w-[calc((100%-1.5rem)/4)]">Unpaid: {formatCurrency(cashier.outstandingPayoutAmount)}</p>
                     <p
-                      className={cashier.netProfit >= 0 ? 'text-green-500' : 'text-red-500'}
+                      className={`w-full md:w-[calc((100%-1.5rem)/4)] ${cashier.netProfit >= 0 ? 'text-status-positive' : 'text-status-negative'}`}
                     >
                       Profit: {formatCurrency(cashier.netProfit)}
                     </p>
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-text-muted">
+                  <div className="flex flex-wrap gap-2 text-xs text-text-muted">
                     <span>tickets: {cashier.ticketsCount}</span>
                     <span>paid: {cashier.paidTicketsCount}</span>
                     <span>unpaid: {cashier.outstandingTicketsCount}</span>
                   </div>
 
-                  <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-center">
-                    <TextField className="md:flex-1">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                    <TextField className="w-full md:flex-1">
                       <Label className="sr-only">New password</Label>
                       <Input
                         type="password"
@@ -383,8 +383,8 @@ export function AdminDashboardPage() {
         </div>
       </section>
 
-      {message ? <p className="text-sm text-green-500">{message}</p> : null}
-      {error ? <p className="text-sm text-red-500">{error}</p> : null}
+      {message ? <p className="text-sm text-status-positive">{message}</p> : null}
+      {error ? <p className="text-sm text-status-negative">{error}</p> : null}
     </div>
   );
 }

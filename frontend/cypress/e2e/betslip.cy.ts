@@ -88,6 +88,15 @@ describe('Bet Slip E2E', () => {
     });
   });
 
+  it('applies quick stake shortcuts', () => {
+    visitWithSeededBetSlip();
+
+    cy.get('[data-testid="betslip-page"]').within(() => {
+      cy.contains('button', 'Br50.00').click({ force: true });
+      cy.get('input[type="number"]').should('have.value', '50');
+    });
+  });
+
   it('shows Book a Bet for guests and returns short booking code', () => {
     cy.intercept('POST', '**/betslip/place-retail*', {
       statusCode: 200,

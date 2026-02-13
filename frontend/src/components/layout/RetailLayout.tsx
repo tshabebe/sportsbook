@@ -19,10 +19,10 @@ export function RetailLayout() {
     }`;
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-contrast">
-      <div className="mx-auto flex max-w-[1200px] gap-4 px-3 py-4 md:gap-6 md:px-4">
-        <aside className="h-fit w-28 shrink-0 self-start rounded-xl border border-border-subtle bg-element-bg p-2 md:w-44">
-          <div className="space-y-1">
+    <div className="flex min-h-screen justify-center bg-app-bg text-text-contrast">
+      <div className="flex w-full max-w-[1200px] gap-4 px-3 py-4 md:gap-6 md:px-4">
+        <aside className="flex h-fit w-28 shrink-0 self-start flex-col gap-3 rounded-xl border border-border-subtle bg-element-bg p-2 md:w-44">
+          <div className="flex flex-col gap-1">
             <Link to="/retail/dashboard?tab=work" className={tabClass('work')}>
               Work
             </Link>
@@ -32,7 +32,7 @@ export function RetailLayout() {
           </div>
           <button
             onClick={handleLogout}
-            className="mt-3 w-full rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-text-muted transition hover:bg-element-hover-bg hover:text-text-contrast"
+            className="w-full rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-text-muted transition hover:bg-element-hover-bg hover:text-text-contrast"
           >
             Logout
           </button>

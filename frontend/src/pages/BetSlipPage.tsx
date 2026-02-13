@@ -78,12 +78,12 @@ export function BetSlipPage() {
           </div>
         ) : null}
         {hydratedCode ? (
-          <div className="border-b border-border-subtle bg-green-500/10 px-4 py-2 text-xs text-green-500">
+          <div className="border-b border-border-subtle bg-status-positive-soft px-4 py-2 text-xs text-status-positive">
             Shared bet {hydratedCode} loaded.
           </div>
         ) : null}
         {hydrateError ? (
-          <div className="border-b border-border-subtle bg-red-500/10 px-4 py-2 text-xs text-red-500">
+          <div className="border-b border-border-subtle bg-status-negative-soft px-4 py-2 text-xs text-status-negative">
             {hydrateError}
           </div>
         ) : null}

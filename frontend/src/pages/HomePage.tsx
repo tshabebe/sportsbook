@@ -269,8 +269,9 @@ export function HomePage() {
 
 
   return (
-    <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 pb-20 md:pb-0">
-      <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-2.5">
+    <div className="flex w-full justify-center">
+      <div className="flex w-full max-w-[1200px] flex-col gap-4 pb-20 md:pb-0">
+      <div className="rounded-xl border border-border-subtle bg-element-bg p-2.5">
         <div className="flex flex-col gap-2">
           <div
             ref={leagueTabsRef}
@@ -303,8 +304,8 @@ export function HomePage() {
                   onClick={() => handleLeagueChange(league.id)}
                   className={`shrink-0 flex items-center justify-center transition-all
                     ${isActive
-                      ? 'bg-[#ffd60a] text-[#1d1d1d] border-[#ffd60a]'
-                      : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333] border-transparent'}
+                      ? 'border-accent-solid bg-accent-solid text-accent-text-contrast'
+                      : 'border-transparent bg-element-hover-bg text-text-muted hover:bg-element-bg hover:text-text-contrast'}
                     
                     /* Mobile: Square Icon Style */
                     flex-col w-14 h-14 rounded-2xl border-2
@@ -314,7 +315,7 @@ export function HomePage() {
                   `}
                 >
                   {league.id === 0 ? (
-                    <AllLeaguesIcon className={`h-8 w-8 md:h-4 md:w-4 ${isActive ? 'text-black' : 'text-white md:text-current'}`} />
+                    <AllLeaguesIcon className={`h-8 w-8 md:h-4 md:w-4 ${isActive ? 'text-accent-text-contrast' : 'text-text-contrast md:text-current'}`} />
                   ) : league.logo ? (
                     <img
                       src={league.logo}
@@ -334,7 +335,7 @@ export function HomePage() {
                   <span className="hidden md:block leading-none">{league.id === 0 ? 'All' : league.name}</span>
 
                   {knownCount !== undefined ? (
-                    <span className={`hidden md:block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${isActive ? 'bg-black/20' : 'bg-[#1d1d1d]'}`}>
+                    <span className={`hidden md:block rounded-full px-1.5 py-0.5 text-[11px] font-medium ${isActive ? 'bg-accent-text-contrast/20 text-accent-text-contrast' : 'bg-app-bg text-text-muted'}`}>
                       {knownCount}
                     </span>
                   ) : null}
@@ -355,8 +356,8 @@ export function HomePage() {
                       data-testid={`market-tab-${option.key}`}
                       onClick={() => updateParam('market', option.key, '1x2')}
                       className={`shrink-0 rounded-md px-3.5 py-2 text-sm font-semibold ${isActive
-                        ? 'bg-[#31ae2f] text-[#041207]'
-                        : 'bg-[#2a2a2a] text-[#c8c8c8] hover:bg-[#333]'
+                        ? 'bg-success-solid text-accent-text-contrast'
+                        : 'bg-element-hover-bg text-text-muted hover:bg-element-bg hover:text-text-contrast'
                         }`}
                     >
                       {option.label}
@@ -378,46 +379,46 @@ export function HomePage() {
                 >
                   <AriaButton
                     data-testid="date-filter-trigger"
-                    className="flex w-full items-center justify-between rounded-lg border border-[#333] bg-[#141414] px-3 py-2 text-sm font-semibold text-[#fafafa] disabled:opacity-60"
+                    className="flex w-full items-center justify-between rounded-lg border border-border-subtle bg-app-bg px-3 py-2 text-sm font-semibold text-text-contrast disabled:opacity-60"
                   >
                     <SelectValue />
                     <span aria-hidden>▾</span>
                   </AriaButton>
-                  <Popover className="min-w-[var(--trigger-width)] rounded-lg border border-[#333] bg-[#1d1d1d] p-1 text-[#fafafa] shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
+                  <Popover className="min-w-[var(--trigger-width)] rounded-lg border border-border-subtle bg-element-bg p-1 text-text-contrast shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
                     <ListBox className="outline-none">
                       <ListBoxItem
                         id="all"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         All Dates
                       </ListBoxItem>
                       <ListBoxItem
                         id="next3h"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         In 3 Hours
                       </ListBoxItem>
                       <ListBoxItem
                         id="future"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         Future
                       </ListBoxItem>
                       <ListBoxItem
                         id="today"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         Today
                       </ListBoxItem>
                       <ListBoxItem
                         id="tomorrow"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         Tomorrow
                       </ListBoxItem>
                       <ListBoxItem
                         id="next7d"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         Next 7 Days
                       </ListBoxItem>
@@ -441,17 +442,17 @@ export function HomePage() {
                 >
                   <AriaButton
                     data-testid="extra-market-trigger"
-                    className="flex w-full items-center justify-between rounded-lg border border-[#333] bg-[#141414] px-3 py-2 text-sm font-semibold text-[#fafafa] disabled:opacity-60"
+                    className="flex w-full items-center justify-between rounded-lg border border-border-subtle bg-app-bg px-3 py-2 text-sm font-semibold text-text-contrast disabled:opacity-60"
                   >
                     <SelectValue />
                     <span aria-hidden>▾</span>
                   </AriaButton>
-                  <Popover className="min-w-[var(--trigger-width)] rounded-lg border border-[#333] bg-[#1d1d1d] p-1 text-[#fafafa] shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
+                  <Popover className="min-w-[var(--trigger-width)] rounded-lg border border-border-subtle bg-element-bg p-1 text-text-contrast shadow-lg data-[entering]:animate-in data-[entering]:fade-in data-[entering]:zoom-in-95 data-[exiting]:animate-out data-[exiting]:fade-out data-[exiting]:zoom-out-95">
                     <ListBox className="outline-none">
                       <ListBoxItem
                         id="none"
                         data-testid="extra-market-option-none"
-                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                        className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                       >
                         More Markets
                       </ListBoxItem>
@@ -459,7 +460,7 @@ export function HomePage() {
                         <ListBoxItem
                           id="no-extra-markets"
                           isDisabled
-                          className="cursor-not-allowed rounded px-3 py-2 text-sm text-[#8a8a8a]"
+                          className="cursor-not-allowed rounded px-3 py-2 text-sm text-text-muted"
                         >
                           No extra markets available
                         </ListBoxItem>
@@ -469,7 +470,7 @@ export function HomePage() {
                             key={option.key}
                             id={option.key}
                             data-testid={`extra-market-option-${option.id}`}
-                            className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-[#2a2a2a] data-[selected]:bg-[#ffd60a] data-[selected]:text-[#1d1d1d]"
+                            className="cursor-pointer rounded px-3 py-2 text-sm outline-none transition data-[focused]:bg-element-hover-bg data-[selected]:bg-accent-solid data-[selected]:text-accent-text-contrast"
                           >
                             {option.label}
                           </ListBoxItem>
@@ -482,41 +483,42 @@ export function HomePage() {
             </div>
 
             {selectedLeagueId === 0 && isFetchingPre ? (
-              <p className="text-xs text-[#c8c8c8] text-right">Loading more leagues...</p>
+              <p className="text-right text-xs text-text-muted">Loading more leagues...</p>
             ) : null}
           </div>
         </div>
       </div>
 
       <div className="min-h-[500px]">
-        {isFetchingPre && fixtures.length > 0 ? (
-          <p className="mb-2 text-xs text-[#c8c8c8]">Refreshing odds...</p>
-        ) : null}
+        <div className="flex flex-col gap-2">
+          {isFetchingPre && fixtures.length > 0 ? (
+            <p className="text-xs text-text-muted">Refreshing odds...</p>
+          ) : null}
         {isLoading && fixtures.length === 0 ? (
           <div
             data-testid="fixtures-skeleton"
-            className="grid gap-4 py-2"
+            className="flex flex-col gap-4 py-2"
           >
             {fixtureSkeletons.map((skeleton) => (
               <div
                 key={skeleton}
-                className="overflow-hidden rounded-lg border border-[#333] bg-[#1d1d1d]"
+                className="overflow-hidden rounded-lg border border-border-subtle bg-element-bg"
               >
-                <div className="h-10 animate-pulse bg-[#24461a]" />
-                <div className="space-y-2 p-4">
-                  <div className="h-4 w-1/3 animate-pulse rounded bg-[#2a2a2a]" />
-                  <div className="h-4 w-2/3 animate-pulse rounded bg-[#2a2a2a]" />
-                  <div className="h-10 w-full animate-pulse rounded bg-[#2a2a2a]" />
+                <div className="h-10 animate-pulse bg-success-solid/30" />
+                <div className="flex flex-col gap-2 p-4">
+                  <div className="h-4 w-1/3 animate-pulse rounded bg-element-hover-bg" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-element-hover-bg" />
+                  <div className="h-10 w-full animate-pulse rounded bg-element-hover-bg" />
                 </div>
               </div>
             ))}
           </div>
         ) : error && fixtures.length === 0 ? (
-          <div className="py-20 text-center text-[#ff3939]">
+          <div className="py-20 text-center text-status-negative">
             Failed to load matches. Please try again.
           </div>
         ) : Object.keys(groupedFixtures).length === 0 ? (
-          <div className="py-20 text-center text-[#c8c8c8]">
+          <div className="py-20 text-center text-text-muted">
             No matches found for this selection.
           </div>
         ) : (
@@ -535,8 +537,9 @@ export function HomePage() {
             ))}
           </div>
         )}
+        </div>
       </div>
-
+      </div>
     </div>
   );
 }

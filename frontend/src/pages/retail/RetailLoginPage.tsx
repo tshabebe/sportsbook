@@ -51,31 +51,33 @@ export function RetailLoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-app-bg px-4">
       <form
         onSubmit={handleSubmit(onSubmit)}
-        className="w-full max-w-md rounded-xl border border-border-subtle bg-element-bg p-6"
+        className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border-subtle bg-element-bg p-6"
       >
-        <h1 className="mb-1 text-xl font-semibold text-text-contrast">Retail POS Login</h1>
-        <p className="mb-6 text-sm text-text-muted">Cashier access only</p>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold text-text-contrast">Retail POS Login</h1>
+          <p className="text-sm text-text-muted">Cashier access only</p>
+        </div>
 
-        <TextField className="mb-4">
-          <Label className="mb-2 block text-xs font-medium text-text-muted">Username</Label>
+        <TextField className="flex flex-col gap-2">
+          <Label className="text-xs font-medium text-text-muted">Username</Label>
           <Input
             {...register('username')}
             className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
           />
         </TextField>
-        {errors.username ? <p className="mb-3 text-xs text-red-500">{errors.username.message}</p> : null}
+        {errors.username ? <p className="text-xs text-text-muted">{errors.username.message}</p> : null}
 
-        <TextField className="mb-4">
-          <Label className="mb-2 block text-xs font-medium text-text-muted">Password</Label>
+        <TextField className="flex flex-col gap-2">
+          <Label className="text-xs font-medium text-text-muted">Password</Label>
           <Input
             type="password"
             {...register('password')}
             className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm text-text-contrast outline-none focus:border-accent-solid"
           />
         </TextField>
-        {errors.password ? <p className="mb-3 text-xs text-red-500">{errors.password.message}</p> : null}
+        {errors.password ? <p className="text-xs text-text-muted">{errors.password.message}</p> : null}
 
-        {error ? <p className="mb-4 text-sm text-red-500">{error}</p> : null}
+        {error ? <p className="text-sm text-text-muted">{error}</p> : null}
 
         <Button type="submit" isDisabled={loading} className="w-full">
           {loading ? 'Signing in...' : 'Sign In'}

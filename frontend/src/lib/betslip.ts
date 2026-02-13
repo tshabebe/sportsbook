@@ -85,18 +85,6 @@ export const calculateBetSlipPreview = (input: {
   }
 
   if (input.mode === 'multiple') {
-    if (selections.length < 2) {
-      return {
-        mode: input.mode,
-        stake: normalizedStake,
-        totalStake: normalizedStake,
-        totalPotentialReturn: 0,
-        lineCount: 0,
-        lines: [],
-        error: 'Need 2+ selections for multiple',
-      };
-    }
-
     const combinedOdds = productOdds(selections);
     const line: BetSlipPreviewLine = {
       key: 'line_1',

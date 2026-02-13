@@ -10,9 +10,10 @@ export function AdminLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-app-bg text-text-contrast">
+    <div className="flex min-h-screen flex-col bg-app-bg text-text-contrast">
       <header className="border-b border-border-subtle bg-element-bg">
-        <div className="mx-auto flex max-w-[1280px] items-center justify-between px-4 py-3">
+        <div className="flex justify-center px-4 py-3">
+          <div className="flex w-full max-w-[1280px] items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">Admin Console</h1>
             <span className="rounded bg-element-hover-bg px-2 py-1 text-xs font-semibold text-text-muted">
@@ -25,11 +26,14 @@ export function AdminLayout() {
           >
             Logout
           </button>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1280px] px-4 py-4">
-        <Outlet />
+      <main className="flex justify-center px-4 py-4">
+        <div className="w-full max-w-[1280px]">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

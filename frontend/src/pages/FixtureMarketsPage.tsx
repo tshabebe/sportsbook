@@ -83,38 +83,36 @@ function MarketAccordion({
   isOpen,
   onToggle,
   children,
-  colsClass = 'grid-cols-2 md:grid-cols-3',
 }: {
   title: string;
   testId: string;
   isOpen: boolean;
   onToggle: () => void;
   children: React.ReactNode;
-  colsClass?: string;
 }) {
   return (
     <div
       data-testid={testId}
-      className="overflow-hidden rounded-lg border border-[#333] bg-[#1d1d1d]"
+      className="w-full overflow-hidden rounded-lg border border-border-subtle bg-element-bg md:w-[calc((100%-0.75rem)/2)]"
     >
       <button
         data-testid="market-accordion-toggle"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex w-full items-center justify-between bg-[#2a2a2a] px-4 py-3 text-left transition-colors hover:bg-[#333]"
+        className="flex w-full items-center justify-between bg-element-hover-bg px-4 py-3 text-left transition-colors hover:bg-app-bg"
       >
-        <span className="text-sm font-semibold text-[#fafafa]">{title}</span>
+        <span className="text-sm font-semibold text-text-contrast">{title}</span>
         {isOpen ? (
-          <ChevronUp className="h-5 w-5 text-[#8a8a8a]" />
+          <ChevronUp className="h-5 w-5 text-text-muted" />
         ) : (
-          <ChevronDown className="h-5 w-5 text-[#8a8a8a]" />
+          <ChevronDown className="h-5 w-5 text-text-muted" />
         )}
       </button>
       <div
         data-testid="market-accordion-content"
         className={`${isOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden transition-all duration-300`}
       >
-        <div className={`grid gap-2 p-3 ${colsClass}`}>
+        <div className="flex flex-wrap gap-2 p-3">
           {children}
         </div>
       </div>
@@ -144,7 +142,7 @@ function OutcomeButton({
         }`}
     >
       <div className="text-[11px] leading-tight opacity-90">{label}{handicap ? ` ${handicap}` : ''}</div>
-      <div className="mt-1 text-sm font-semibold">{odd}</div>
+      <div className="text-sm font-semibold">{odd}</div>
     </button>
   );
 }
@@ -180,18 +178,18 @@ export function FixtureMarketsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4 p-4">
-        <div className="h-40 animate-pulse rounded-xl bg-[#1d1d1d]" />
-        <div className="h-12 animate-pulse rounded-lg bg-[#1d1d1d]" />
-        <div className="space-y-3">
-          <div className="h-64 animate-pulse rounded-lg bg-[#1d1d1d]" />
-          <div className="h-64 animate-pulse rounded-lg bg-[#1d1d1d]" />
+      <div className="flex flex-col gap-4 p-4">
+        <div className="h-40 animate-pulse rounded-xl bg-element-bg" />
+        <div className="h-12 animate-pulse rounded-lg bg-element-bg" />
+        <div className="flex flex-col gap-3">
+          <div className="h-64 animate-pulse rounded-lg bg-element-bg" />
+          <div className="h-64 animate-pulse rounded-lg bg-element-bg" />
         </div>
       </div>
     );
   }
 
-  if (!fixtureDetails) return <div className="py-20 text-center text-[#8a8a8a]">Fixture not found.</div>;
+  if (!fixtureDetails) return <div className="py-20 text-center text-text-muted">Fixture not found.</div>;
 
   const fixture = fixtureDetails.fixture;
   const league = fixtureDetails.league;
@@ -231,52 +229,50 @@ export function FixtureMarketsPage() {
   const isSelected = (selectionId: string) => bets.some((b) => b.id === selectionId);
 
   return (
-    <div className="mx-auto w-full max-w-[980px] pb-24">
-      {/* Sticky Header */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-[#333] bg-[#0d0d0d]/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[#0d0d0d]/80">
+    <div className="flex w-full justify-center">
+      <div className="w-full max-w-[980px] pb-24">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-border-subtle bg-app-bg/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-app-bg/80">
         <button
           data-testid="fixture-back-button"
           onClick={() => navigate(-1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2a2a2a] text-[#ffffff] hover:bg-[#333]"
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-element-hover-bg text-text-contrast hover:bg-element-bg"
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1 text-center">
-          <h1 className="truncate text-sm font-bold text-[#ffffff]">{teams.home.name} vs {teams.away.name}</h1>
-          <p className="truncate text-[11px] text-[#8a8a8a]">{league.name}</p>
+          <h1 className="truncate text-sm font-bold text-text-contrast">{teams.home.name} vs {teams.away.name}</h1>
+          <p className="truncate text-[11px] text-text-muted">{league.name}</p>
         </div>
-        <div className="w-8" /> {/* Spacer for centering */}
+        <div className="w-8" />
       </div>
 
-      {/* Scoreboard / Info Card */}
       <div className="px-4 py-4">
-        <div className="rounded-2xl bg-gradient-to-br from-[#1d1d1d] to-[#141414] p-6 shadow-lg border border-[#333]">
+        <div className="rounded-2xl border border-border-subtle bg-element-bg p-6 shadow-sm">
           <div className="flex flex-col items-center gap-4">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[#8a8a8a] bg-[#2a2a2a] px-2 py-0.5 rounded">
+            <div className="rounded bg-app-bg px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-text-muted">
               {formatFixtureTime(fixture.date)}
             </div>
 
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full items-center justify-between gap-2">
               <div className="flex flex-1 flex-col items-center gap-2 text-center">
                 <img src={teams.home.logo} alt={teams.home.name} className="h-16 w-16 object-contain drop-shadow-md" />
-                <span className="text-sm font-bold text-[#ffffff] leading-tight">{teams.home.name}</span>
+                <span className="text-sm font-bold leading-tight text-text-contrast">{teams.home.name}</span>
               </div>
 
-              <div className="mx-2 flex flex-col items-center">
-                <span className="text-2xl font-black text-[#ffd60a] tracking-widest">VS</span>
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-black tracking-widest text-accent-solid">VS</span>
               </div>
 
               <div className="flex flex-1 flex-col items-center gap-2 text-center">
                 <img src={teams.away.logo} alt={teams.away.name} className="h-16 w-16 object-contain drop-shadow-md" />
-                <span className="text-sm font-bold text-[#ffffff] leading-tight">{teams.away.name}</span>
+                <span className="text-sm font-bold leading-tight text-text-contrast">{teams.away.name}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Categories */}
-      <div className="sticky top-[57px] z-10 bg-[#0d0d0d] px-4 pb-2 pt-0">
+      <div className="sticky top-[57px] z-10 bg-app-bg px-4 pb-2 pt-0">
         <div className="flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           {categoryOrder.map((cat) => {
             const count = cat.key === 'all' ? markets.length : categorized[cat.key].length;
@@ -286,8 +282,8 @@ export function FixtureMarketsPage() {
                 key={cat.key}
                 onClick={() => setActiveCategory(cat.key)}
                 className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-bold transition-all ${activeCategory === cat.key
-                  ? 'bg-[#ffd60a] text-[#000000] shadow-[0_0_10px_rgba(255,214,10,0.3)]'
-                  : 'bg-[#1d1d1d] text-[#8a8a8a] hover:bg-[#2a2a2a] hover:text-[#ffffff]'
+                  ? 'bg-accent-solid text-accent-text-contrast shadow-sm'
+                  : 'bg-element-bg text-text-muted hover:bg-element-hover-bg hover:text-text-contrast'
                   }`}
               >
                 {cat.label}
@@ -297,10 +293,9 @@ export function FixtureMarketsPage() {
         </div>
       </div>
 
-      {/* Markets List */}
-      <div data-testid="fixture-markets-grid" className="grid gap-3 px-4 pb-8 md:grid-cols-2">
+      <div data-testid="fixture-markets-grid" className="flex flex-wrap gap-3 px-4 pb-8">
         {visibleMarkets.length === 0 ? (
-          <div className="rounded-xl border border-[#333] bg-[#1d1d1d] p-8 text-center text-sm text-[#8a8a8a]">
+          <div className="w-full rounded-xl border border-border-subtle bg-element-bg p-8 text-center text-sm text-text-muted">
             No markets available in this category.
           </div>
         ) : (
@@ -308,16 +303,13 @@ export function FixtureMarketsPage() {
             const marketKey = `${market.id}-${market.name}-${marketIdx}`;
             const marketTestId = `market-accordion-${market.id}-${marketIdx}`;
 
-            // Determine adaptive grid columns
-            // If exactly 3 outcomes (like 1X2), use grid-cols-3
-            // If 2 outcomes (Over/Under), use grid-cols-2
-            // Else default to grid-cols-2 or grid-cols-3 based on count
             const outcomeCount = market.values.length;
-            const gridColsClass = outcomeCount === 3
-              ? 'grid-cols-3'
-              : outcomeCount === 2
-                ? 'grid-cols-2'
-                : 'grid-cols-2 md:grid-cols-3';
+            const marketItemClass =
+              outcomeCount === 3
+                ? 'w-[calc((100%-1rem)/3)]'
+                : outcomeCount === 2
+                  ? 'w-[calc((100%-0.5rem)/2)]'
+                  : 'w-[calc((100%-0.5rem)/2)] md:w-[calc((100%-1rem)/3)]';
 
             return (
               <MarketAccordion
@@ -326,41 +318,45 @@ export function FixtureMarketsPage() {
                 title={market.name}
                 isOpen={openMarkets[marketKey] ?? false}
                 onToggle={() => toggleMarket(marketKey)}
-                colsClass={gridColsClass}
               >
                 {market.values.map((outcome, idx) => {
                   const selectionId = `${fixture.id}-${marketKey}-${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`;
                   return (
-                    <OutcomeButton
+                    <div
                       key={`${outcome.value}-${outcome.handicap ?? 'nohcp'}-${idx}`}
-                      label={outcome.value}
-                      odd={outcome.odd}
-                      handicap={outcome.handicap}
-                      isSelected={isSelected(selectionId)}
-                      onClick={() => {
-                        addToBetSlip({
-                          id: selectionId,
-                          fixtureId: fixture.id,
-                          betId: market.id,
-                          value: outcome.value,
-                          odd: Number(outcome.odd),
-                          handicap: outcome.handicap,
-                          bookmakerId: bookmakerId ?? undefined,
-                          fixtureName,
-                          marketName: market.name,
-                          selectionName: `${outcome.value}${outcome.handicap ? ` ${outcome.handicap}` : ''}`,
-                          odds: Number(outcome.odd),
-                          leagueName: league.name,
-                          fixtureDate: fixture.date,
-                        });
-                      }}
-                    />
+                      className={marketItemClass}
+                    >
+                      <OutcomeButton
+                        label={outcome.value}
+                        odd={outcome.odd}
+                        handicap={outcome.handicap}
+                        isSelected={isSelected(selectionId)}
+                        onClick={() => {
+                          addToBetSlip({
+                            id: selectionId,
+                            fixtureId: fixture.id,
+                            betId: market.id,
+                            value: outcome.value,
+                            odd: Number(outcome.odd),
+                            handicap: outcome.handicap,
+                            bookmakerId: bookmakerId ?? undefined,
+                            fixtureName,
+                            marketName: market.name,
+                            selectionName: `${outcome.value}${outcome.handicap ? ` ${outcome.handicap}` : ''}`,
+                            odds: Number(outcome.odd),
+                            leagueName: league.name,
+                            fixtureDate: fixture.date,
+                          });
+                        }}
+                      />
+                    </div>
                   );
                 })}
               </MarketAccordion>
             );
           })
         )}
+      </div>
       </div>
     </div>
   );

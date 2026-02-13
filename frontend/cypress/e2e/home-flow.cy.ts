@@ -333,7 +333,7 @@ describe('Home Betting UX', () => {
 
     cy.get('[data-testid="fixture-markets-grid"]')
       .should('exist')
-      .and('have.class', 'md:grid-cols-2');
+      .and('have.class', 'flex');
     cy.get('[data-testid="market-accordion-content"]')
       .first()
       .should('not.be.visible');

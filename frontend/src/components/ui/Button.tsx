@@ -10,8 +10,8 @@ const buttonVariants = cva(
                 solid: "bg-accent-solid hover:bg-accent-solid-hover text-accent-text-contrast shadow-sm",
                 outline: "border border-border-subtle hover:bg-element-hover-bg text-text-contrast",
                 ghost: "hover:bg-element-hover-bg text-text-muted hover:text-text-contrast",
-                danger: "bg-red-600 hover:bg-red-700 text-white shadow-sm",
-                success: "bg-success-solid hover:bg-success-solid/90 text-white shadow-sm",
+                danger: "bg-status-negative hover:bg-status-negative/90 text-accent-text-contrast shadow-sm",
+                success: "bg-success-solid hover:bg-success-solid/90 text-accent-text-contrast shadow-sm",
             },
             size: {
                 sm: "h-8 px-3 text-xs",

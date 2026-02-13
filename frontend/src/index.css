@@ -17,6 +17,18 @@
   --color-accent-solid-hover: var(--color-accent-solid-hover);
   --color-accent-text-contrast: var(--color-accent-text-contrast);
 
+  /* --- Status Semantics --- */
+  --color-success-solid: var(--color-success-solid);
+  --color-status-positive: var(--color-status-positive);
+  --color-status-positive-soft: var(--color-status-positive-soft);
+  --color-status-negative: var(--color-status-negative);
+  --color-status-negative-soft: var(--color-status-negative-soft);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-warning-soft: var(--color-status-warning-soft);
+  --color-status-info: var(--color-status-info);
+  --color-status-info-soft: var(--color-status-info-soft);
+  --color-overlay-strong: var(--color-overlay-strong);
+
   /* --- Utility --- */
   --font-poppins: "Poppins", sans-serif;
 }
@@ -47,7 +59,16 @@
   --color-accent-text-contrast: #000000;
 
   /* Status */
-  --color-success-solid: #28B328;
+  --color-success-solid: #16a34a;
+  --color-status-positive: #16a34a;
+  --color-status-positive-soft: rgba(22, 163, 74, 0.14);
+  --color-status-negative: #dc2626;
+  --color-status-negative-soft: rgba(220, 38, 38, 0.14);
+  --color-status-warning: #d97706;
+  --color-status-warning-soft: rgba(217, 119, 6, 0.14);
+  --color-status-info: #2563eb;
+  --color-status-info-soft: rgba(37, 99, 235, 0.14);
+  --color-overlay-strong: rgba(15, 23, 42, 0.7);
 }
 
 /* Dark Mode Overrides (System Preference) */
@@ -71,6 +92,18 @@
     --color-accent-solid: #FFD700;
     --color-accent-solid-hover: #FFC700;
     --color-accent-text-contrast: #000000;
+
+    /* Status */
+    --color-success-solid: #22c55e;
+    --color-status-positive: #4ade80;
+    --color-status-positive-soft: rgba(74, 222, 128, 0.18);
+    --color-status-negative: #f87171;
+    --color-status-negative-soft: rgba(248, 113, 113, 0.2);
+    --color-status-warning: #fbbf24;
+    --color-status-warning-soft: rgba(251, 191, 36, 0.2);
+    --color-status-info: #60a5fa;
+    --color-status-info-soft: rgba(96, 165, 250, 0.2);
+    --color-overlay-strong: rgba(2, 6, 23, 0.78);
   }
 }
 

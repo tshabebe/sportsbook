@@ -39,7 +39,6 @@ const ticketLookupSchema = z.object({
 type TicketLookupForm = z.infer<typeof ticketLookupSchema>;
 
 type VariantTone = {
-  shell: string;
   header: string;
   card: string;
   badge: string;
@@ -47,34 +46,29 @@ type VariantTone = {
 
 const variantTone: Record<string, VariantTone> = {
   '1': {
-    shell: 'space-y-4',
     header: 'rounded-xl border border-border-subtle bg-element-bg p-4',
     card: 'rounded-xl border border-border-subtle bg-element-bg p-4',
     badge: 'bg-accent-solid/20 text-accent-solid',
   },
   '2': {
-    shell: 'space-y-4',
-    header: 'rounded-xl border border-red-500/30 bg-red-500/10 p-4',
-    card: 'rounded-xl border border-red-500/30 bg-element-bg p-4',
-    badge: 'bg-red-500/20 text-red-500',
+    header: 'rounded-xl border border-status-negative/40 bg-status-negative-soft p-4',
+    card: 'rounded-xl border border-status-negative/40 bg-element-bg p-4',
+    badge: 'bg-status-negative-soft text-status-negative',
   },
   '3': {
-    shell: 'space-y-2',
     header: 'rounded-lg border border-border-subtle bg-element-bg p-3',
     card: 'rounded-lg border border-border-subtle bg-element-bg p-3',
     badge: 'bg-app-bg text-text-muted',
   },
   '4': {
-    shell: 'space-y-4',
-    header: 'rounded-xl border border-blue-500/30 bg-blue-500/10 p-4',
-    card: 'rounded-xl border border-blue-500/30 bg-element-bg p-4',
-    badge: 'bg-blue-500/20 text-blue-500',
+    header: 'rounded-xl border border-status-info/40 bg-status-info-soft p-4',
+    card: 'rounded-xl border border-status-info/40 bg-element-bg p-4',
+    badge: 'bg-status-info-soft text-status-info',
   },
   '5': {
-    shell: 'space-y-4',
-    header: 'rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4',
-    card: 'rounded-xl border border-emerald-500/30 bg-element-bg p-4',
-    badge: 'bg-emerald-500/20 text-emerald-500',
+    header: 'rounded-xl border border-status-positive/40 bg-status-positive-soft p-4',
+    card: 'rounded-xl border border-status-positive/40 bg-element-bg p-4',
+    badge: 'bg-status-positive-soft text-status-positive',
   },
 };
 
@@ -130,10 +124,13 @@ export function TicketTrackerPage() {
   }, [searchParams, setValue]);
 
   return (
-    <div className={`mx-auto w-full max-w-[880px] ${tone.shell}`}>
+    <div className="flex w-full justify-center">
+      <div className="flex w-full max-w-[880px] flex-col gap-4">
       <div className={tone.header}>
-        <h1 className="mb-1 text-xl font-semibold">Track Ticket</h1>
-        <p className="mb-4 text-sm text-text-muted">Enter ticket ID to check claim, settlement, and payout status.</p>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold">Track Ticket</h1>
+          <p className="text-sm text-text-muted">Enter ticket ID to check claim, settlement, and payout status.</p>
+        </div>
 
         <form onSubmit={handleSubmit(runLookup)} className="flex flex-col gap-2 md:flex-row">
           <TextField className="flex-1">
@@ -144,55 +141,55 @@ export function TicketTrackerPage() {
               className="w-full rounded border border-border-subtle bg-app-bg px-3 py-2 text-sm outline-none focus:border-accent-solid"
             />
           </TextField>
-          <Button type="submit" isDisabled={loading} className="text-black">
+          <Button type="submit" isDisabled={loading}>
             {loading ? 'Checking...' : 'Check'}
           </Button>
         </form>
 
-        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+        <div className="flex flex-wrap gap-2 text-[11px]">
           <span className={`rounded-full px-2 py-1 ${tone.badge}`}>View Variant {variant}</span>
           <span className="rounded-full bg-app-bg px-2 py-1 text-text-muted">Ticket Lookup</span>
         </div>
-        {errors.ticketId ? <p className="mt-2 text-xs text-red-500">{errors.ticketId.message}</p> : null}
+        {errors.ticketId ? <p className="text-xs text-status-negative">{errors.ticketId.message}</p> : null}
       </div>
 
-      {error ? <p className="rounded border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-500">{error}</p> : null}
+      {error ? <p className="rounded border border-status-negative/40 bg-status-negative-soft px-3 py-2 text-sm text-status-negative">{error}</p> : null}
 
       {result ? (
         <div className={tone.card}>
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-lg border border-border-subtle bg-app-bg p-3 text-sm">
-              <p className="mb-2 text-xs uppercase tracking-wide text-text-muted">Ticket</p>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex w-full flex-col gap-1 rounded-lg border border-border-subtle bg-app-bg p-3 text-sm md:w-[calc((100%-0.75rem)/2)]">
+              <p className="text-xs uppercase tracking-wide text-text-muted">Ticket</p>
               <p className="flex items-center gap-2"><Ticket className="h-4 w-4 text-accent-solid" /> {result.ticket.ticketId}</p>
-              <p className="mt-1 flex items-center gap-2"><Hash className="h-4 w-4 text-accent-solid" /> Bet #{result.bet.id ?? '-'}</p>
-              <p className="mt-1">Status: <span className="font-semibold">{result.ticket.status}</span></p>
-              <p className="mt-1">Claimed By Retailer: {result.ticket.claimedByRetailerId ?? '-'}</p>
+              <p className="flex items-center gap-2"><Hash className="h-4 w-4 text-accent-solid" /> Bet #{result.bet.id ?? '-'}</p>
+              <p>Status: <span className="font-semibold">{result.ticket.status}</span></p>
+              <p>Claimed By Retailer: {result.ticket.claimedByRetailerId ?? '-'}</p>
             </div>
 
-            <div className="rounded-lg border border-border-subtle bg-app-bg p-3 text-sm">
-              <p className="mb-2 text-xs uppercase tracking-wide text-text-muted">Financials</p>
+            <div className="flex w-full flex-col gap-1 rounded-lg border border-border-subtle bg-app-bg p-3 text-sm md:w-[calc((100%-0.75rem)/2)]">
+              <p className="text-xs uppercase tracking-wide text-text-muted">Financials</p>
               <p className="flex items-center gap-2"><Wallet className="h-4 w-4 text-accent-solid" /> Stake: {result.bet.stake}</p>
-              <p className="mt-1">Bet Status: {result.bet.status}</p>
-              <p className="mt-1">Payout: {result.bet.payout ?? '-'}</p>
-              <p className="mt-1">Ticket Payout Amount: {result.ticket.payoutAmount ?? '-'}</p>
+              <p>Bet Status: {result.bet.status}</p>
+              <p>Payout: {result.bet.payout ?? '-'}</p>
+              <p>Ticket Payout Amount: {result.ticket.payoutAmount ?? '-'}</p>
             </div>
           </div>
 
-          <div className="mt-3 rounded-lg border border-border-subtle bg-app-bg p-3">
-            <p className="mb-2 text-xs uppercase tracking-wide text-text-muted">Lifecycle</p>
-            <div className="grid gap-2 md:grid-cols-4">
+          <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-app-bg p-3">
+            <p className="text-xs uppercase tracking-wide text-text-muted">Lifecycle</p>
+            <div className="flex flex-wrap gap-2">
               {steps.map((step) => (
-                <div key={step.label} className="rounded border border-border-subtle px-2 py-2 text-xs">
+                <div key={step.label} className="w-[calc((100%-0.5rem)/2)] rounded border border-border-subtle px-2 py-2 text-xs md:w-[calc((100%-1.5rem)/4)]">
                   <div className="flex items-center gap-1.5">
-                    <CheckCircle2 className={`h-3.5 w-3.5 ${step.done ? 'text-green-500' : 'text-text-muted'}`} />
+                    <CheckCircle2 className={`h-3.5 w-3.5 ${step.done ? 'text-status-positive' : 'text-text-muted'}`} />
                     <span>{step.label}</span>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-2 grid gap-2 text-xs text-text-muted md:grid-cols-2">
-              <p className="flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" /> Settled: {result.bet.settledAt ?? '-'}</p>
-              <p className="flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" /> Expires: {result.ticket.expiresAt ?? '-'}</p>
+            <div className="flex flex-wrap gap-2 text-xs text-text-muted">
+              <p className="flex w-full items-center gap-1.5 md:w-[calc((100%-0.5rem)/2)]"><Clock3 className="h-3.5 w-3.5" /> Settled: {result.bet.settledAt ?? '-'}</p>
+              <p className="flex w-full items-center gap-1.5 md:w-[calc((100%-0.5rem)/2)]"><CalendarDays className="h-3.5 w-3.5" /> Expires: {result.ticket.expiresAt ?? '-'}</p>
             </div>
           </div>
         </div>
@@ -201,6 +198,7 @@ export function TicketTrackerPage() {
       <Link to="/play" className="inline-block text-sm font-medium text-accent-solid hover:underline">
         Back to betting
       </Link>
+      </div>
     </div>
   );
 }

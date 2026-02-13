@@ -237,35 +237,36 @@ export function FixtureRow({
             ],
           };
 
-  const marketGridClass = market.rows.length === 2 ? 'w-36 md:w-52 grid-cols-2' : 'w-48 md:w-64 grid-cols-3';
+  const marketWidthClass = market.rows.length === 2 ? 'w-36 md:w-52' : 'w-48 md:w-64';
+  const marketItemClass =
+    market.rows.length === 2
+      ? 'w-[calc((100%-0.5rem)/2)]'
+      : 'w-[calc((100%-1rem)/3)]';
 
   return (
     <div
       onClick={handleRowClick}
-      className="group relative w-full cursor-pointer border-b border-[#333] bg-[#1d1d1d] transition-colors hover:bg-[#252525]"
+      className="group relative w-full cursor-pointer border-b border-border-subtle bg-element-bg transition-colors hover:bg-element-hover-bg"
     >
-      {/* Desktop Layout (md+) */}
       <div className="hidden w-full flex-row items-center gap-4 px-4 py-3 md:flex">
-        {/* Time / Status */}
         <div className="flex w-16 shrink-0 flex-col items-center justify-center">
           {isLive ? (
-            <span className="rounded bg-[#ff3939]/10 px-1 text-[11px] font-medium text-[#ff3939] animate-pulse">
+            <span className="animate-pulse rounded bg-status-negative-soft px-1 text-[11px] font-medium text-status-negative">
               {fixture.fixture.status.elapsed}'
             </span>
           ) : (
-            <span className="text-[12px] font-medium text-[#c8c8c8]">{time}</span>
+            <span className="text-[12px] font-medium text-text-muted">{time}</span>
           )}
         </div>
 
-        {/* Teams */}
         <div className="flex flex-1 flex-col justify-center">
-          <div className="mb-1 flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <img
               src={fixture.teams.home.logo}
               alt={fixture.teams.home.name}
               className="h-4 w-4 object-contain"
             />
-            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+            <span className="truncate text-[13px] font-medium text-text-contrast">
               {fixture.teams.home.name}
             </span>
           </div>
@@ -275,64 +276,61 @@ export function FixtureRow({
               alt={fixture.teams.away.name}
               className="h-4 w-4 object-contain"
             />
-            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+            <span className="truncate text-[13px] font-medium text-text-contrast">
               {fixture.teams.away.name}
             </span>
           </div>
         </div>
 
-        {/* Live Score (if applicable) */}
         {(isLive || fixture.goals.home !== null) && (
-          <div className="flex w-12 flex-col items-center justify-center gap-1 font-bold text-[#ffd60a]">
+          <div className="flex w-12 flex-col items-center justify-center gap-1 font-bold text-accent-solid">
             <span>{fixture.goals.home ?? 0}</span>
             <span>{fixture.goals.away ?? 0}</span>
           </div>
         )}
 
-        {/* Market Odds */}
-        <div className={`grid ${marketGridClass} gap-2`}>
+        <div className={`${marketWidthClass} flex flex-wrap gap-2`}>
           {market.rows.map((row) => (
-            <OddButton
-              key={`${row.label}-${row.selection}-${row.handicap ?? 'nohcp'}`}
-              label={row.label}
-              odd={row.odd}
-              showLabel={false}
-              isSelected={isSelectionActive(market.betId, row.selection, row.handicap)}
-              onClick={(e) =>
-                handleOddClick(
-                  e,
-                  market.betId,
-                  row.selection,
-                  row.selectionName,
-                  row.odd,
-                  market.marketName,
-                  row.handicap,
-                )
-              }
-            />
+            <div key={`${row.label}-${row.selection}-${row.handicap ?? 'nohcp'}`} className={marketItemClass}>
+              <OddButton
+                label={row.label}
+                odd={row.odd}
+                showLabel={false}
+                isSelected={isSelectionActive(market.betId, row.selection, row.handicap)}
+                onClick={(e) =>
+                  handleOddClick(
+                    e,
+                    market.betId,
+                    row.selection,
+                    row.selectionName,
+                    row.odd,
+                    market.marketName,
+                    row.handicap,
+                  )
+                }
+              />
+            </div>
           ))}
         </div>
 
-        {/* Plus Button for More Markets */}
         <div onClick={handleRowClick} className="group/plus flex w-8 cursor-pointer items-center justify-center">
-          <div className="flex h-6 w-6 items-center justify-center rounded border border-[#333] bg-[#1d1d1d] transition-colors group-hover/plus:bg-[#333]">
-            <svg className="h-4 w-4 text-[#c8c8c8] group-hover/plus:text-[#ffd60a]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex h-6 w-6 items-center justify-center rounded border border-border-subtle bg-element-bg transition-colors group-hover/plus:bg-element-hover-bg">
+            <svg className="h-4 w-4 text-text-muted group-hover/plus:text-accent-solid" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
             </svg>
           </div>
         </div>
       </div>
 
-      {/* Mobile Layout (< md) */}
       <div className="flex w-full items-center gap-3 px-4 py-3 md:hidden">
-        <div className="flex min-w-0 flex-1 flex-col justify-center">
-          <div className="mb-1 flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1 justify-center">
+          <div className="flex items-center gap-2">
             <img
               src={fixture.teams.home.logo}
               alt={fixture.teams.home.name}
               className="h-4 w-4 object-contain"
             />
-            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+            <span className="truncate text-[13px] font-medium text-text-contrast">
               {fixture.teams.home.name}
             </span>
           </div>
@@ -342,33 +340,37 @@ export function FixtureRow({
               alt={fixture.teams.away.name}
               className="h-4 w-4 object-contain"
             />
-            <span className="truncate text-[13px] font-medium text-[#fafafa]">
+            <span className="truncate text-[13px] font-medium text-text-contrast">
               {fixture.teams.away.name}
             </span>
           </div>
-          <span className="mt-1 text-[11px] font-medium text-[#c8c8c8]">{time}</span>
+          <span className="text-[11px] font-medium text-text-muted">{time}</span>
         </div>
 
-        <div className={`grid ${marketGridClass} gap-2`}>
+        <div className={`${marketWidthClass} flex flex-wrap gap-2`}>
           {market.rows.map((row) => (
-            <OddButton
+            <div
               key={`${row.label}-${row.selection}-${row.handicap ?? 'nohcp'}-mobile`}
-              label={row.label}
-              odd={row.odd}
-              showLabel={false}
-              isSelected={isSelectionActive(market.betId, row.selection, row.handicap)}
-              onClick={(e) =>
-                handleOddClick(
-                  e,
-                  market.betId,
-                  row.selection,
-                  row.selectionName,
-                  row.odd,
-                  market.marketName,
-                  row.handicap,
-                )
-              }
-            />
+              className={marketItemClass}
+            >
+              <OddButton
+                label={row.label}
+                odd={row.odd}
+                showLabel={false}
+                isSelected={isSelectionActive(market.betId, row.selection, row.handicap)}
+                onClick={(e) =>
+                  handleOddClick(
+                    e,
+                    market.betId,
+                    row.selection,
+                    row.selectionName,
+                    row.odd,
+                    market.marketName,
+                    row.handicap,
+                  )
+                }
+              />
+            </div>
           ))}
         </div>
       </div>
@@ -376,7 +378,6 @@ export function FixtureRow({
   );
 }
 
-// Sub-component for Odds Button
 function OddButton({
   label,
   subLabel,
@@ -400,22 +401,22 @@ function OddButton({
     <button
       onClick={onClick}
       disabled={!isSelectable}
-      className={`group/btn flex h-full w-full flex-col items-center justify-center rounded border px-1 py-2 transition-colors ${isSelected
-          ? 'border-[#ffd60a] bg-[#ffd60a] text-[#1d1d1d]'
+      className={`group/btn flex h-full w-full flex-col items-center justify-center gap-0.5 rounded border px-1 py-2 transition-colors ${isSelected
+          ? 'border-accent-solid bg-accent-solid text-accent-text-contrast'
           : isSelectable
-            ? 'border-[#111] bg-[#3a3a3a] hover:bg-[#4a4a4a] active:bg-[#2b2b2b]'
-            : 'cursor-not-allowed border-[#222] bg-[#2b2b2b] text-[#8a8a8a]'
+            ? 'border-border-subtle bg-element-hover-bg text-text-contrast hover:bg-element-bg active:bg-element-hover-bg'
+            : 'cursor-not-allowed border-border-subtle bg-app-bg text-text-muted'
         }`}
     >
       {showLabel && (
         <span
-          className={`mb-0.5 w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-[#1d1d1d]/80' : 'text-[#e6e6e6]'
+          className={`w-full truncate px-1 text-center text-[10px] ${isSelected ? 'text-accent-text-contrast/80' : 'text-text-muted'
             }`}
         >
           {subLabel || label}
         </span>
       )}
-      <span className={`text-[13px] font-bold ${isSelected ? 'text-[#1d1d1d]' : 'text-[#ffffff]'}`}>
+      <span className={`text-[13px] font-bold ${isSelected ? 'text-accent-text-contrast' : 'text-text-contrast'}`}>
         {displayOdd}
       </span>
     </button>

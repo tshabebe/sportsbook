@@ -25,6 +25,18 @@ describe('calculateBetSlipPreview', () => {
     expect(preview.totalPotentialReturn).toBe(272);
   });
 
+  it('allows multiple mode with one selection', () => {
+    const preview = calculateBetSlipPreview({
+      mode: 'multiple',
+      stake: 20,
+      selections: [{ odd: 2.5 }],
+    });
+
+    expect(preview.error).toBeNull();
+    expect(preview.lineCount).toBe(1);
+    expect(preview.totalPotentialReturn).toBe(50);
+  });
+
   it('builds all combinations for system mode', () => {
     const preview = calculateBetSlipPreview({
       mode: 'system',
